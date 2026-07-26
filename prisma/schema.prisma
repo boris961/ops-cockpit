@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DIRECT_DB")
+}
+
+enum Role {
+  COO
+  HEAD
+  DIRECTEUR
+  CONSULTANT
+  MEMBRE
+}
+
+enum ProjectStatus {
+  CADRAGE
+  EN_COURS
+  A_RISQUE
+  EN_VALIDATION
+  TERMINE
+  ARCHIVE
+}
+
+enum Health {
+  VERT
+  ORANGE
+  ROUGE
+}
+
+enum TaskStatus {
+  BACKLOG
+  CETTE_SEMAINE
+  EN_COURS
+  EN_REVIEW
+  TERMINE
+}
+
+enum Priority {
+  P0
+  P1
+  P2
+  P3
+}
+
+enum IssueStatus {
+  NEW
+  QUALIFIE
+  EN_COURS
+  BLOQUE
+  A_VERIFIER
+  CLOTURE
+}
+
+enum ActivityType {
+  STATUT
+  SANTE
+  AVANCEMENT
+  TACHE_CREEE
+  TACHE_FAITE
+  BLOCAGE_CREE
+  BLOCAGE_RESOLU
+  COMMENTAIRE
+  LIVRABLE
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(MEMBRE)
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  projets       Project[]  @relation("owner")
+  projetsMembre Project[]  @relation("MembresProjet")
+  taches        Task[]     @relation("taskOwner")
+  blocagesEmis  Issue[]    @relation("reporter")
+  blocagesGeres Issue[]    @relation("issueOwner")
+  activites     Activity[]
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  nom           String
+  description   String?
+  ownerId       String
+  owner         User          @relation("owner", fields: [ownerId], references: [id])
+  pole          String?
+  departements  String[]      @default([])
+  status        ProjectStatus @default(CADRAGE)
+  sante         Health        @default(VERT)
+  avancement    Int           @default(0)
+  dateDebut     DateTime?
+  dateCible     DateTime?
+  prochainJalon String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  taches    Task[]
+  blocages  Issue[]
+  activites Activity[]
+  membres   User[]     @relation("MembresProjet")
+  @@index([status])
+  @@index([ownerId])
+}
+
+model Task {
+  id               String     @id @default(cuid())
+  projectId        String
+  project          Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  titre            String
+  ownerId          String?
+  owner            User?      @relation("taskOwner", fields: [ownerId], references: [id])
+  status           TaskStatus @default(BACKLOG)
+  priorite         Priority?
+  echeance         DateTime?
+  definitionOfDone String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  @@index([projectId])
+  @@index([status])
+}
+
+model Issue {
+  id          String      @id @default(cuid())
+  titre       String
+  description String?
+  projectId   String?
+  project     Project?    @relation(fields: [projectId], references: [id])
+  reporterId  String
+  reporter    User        @relation("reporter", fields: [reporterId], references: [id])
+  ownerId     String?
+  owner       User?       @relation("issueOwner", fields: [ownerId], references: [id])
+  priorite    Priority    @default(P2)
+  status      IssueStatus @default(NEW)
+  categorie   String?
+  createdAt   DateTime    @default(now())
+  resolvedAt  DateTime?
+  @@index([status])
+  @@index([projectId])
+}
+
+model Activity {
+  id        String       @id @default(cuid())
+  actorId   String
+  actor     User         @relation(fields: [actorId], references: [id])
+  projectId String?
+  project   Project?     @relation(fields: [projectId], references: [id])
+  type      ActivityType
+  message   String
+  createdAt DateTime     @default(now())
+  @@index([createdAt])
+}
+
+model MetricDaily {
+  date            DateTime @id @db.Date
+  avancementMoyen Int
+  projetsActifs   Int
+  blocagesOuverts Int
+  tachesEnRetard  Int
+}
