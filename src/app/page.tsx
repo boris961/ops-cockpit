@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, Clock, Gauge, ListTodo } from 'lucide-reac
 import { getOverview, getPorteurs } from '@/lib/queries'
 import { FiltrePorteur } from '@/components/cockpit/filtre-porteur'
 import { PRIORITE_LABEL, STATUTS, tempsRelatif } from '@/lib/cockpit'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Carte } from '@/components/cockpit/carte'
 import {
   Table,
   TableBody,
@@ -52,7 +52,7 @@ export default async function VueDEnsemble(props: PageProps<'/'>) {
     <div className="px-6 py-8 lg:px-10">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-heading text-4xl leading-tight">Vue d&apos;ensemble</h1>
+          <h1 className="text-4xl font-light leading-tight tracking-tight">Vue d&apos;ensemble</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             L&apos;état du portefeuille de missions, en un coup d&apos;œil.
           </p>
@@ -97,36 +97,27 @@ export default async function VueDEnsemble(props: PageProps<'/'>) {
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Card className="ring-border">
-              <CardHeader>
-                <CardTitle>Avancement par projet</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <GrapheAvancement data={pointsAvancement} />
-              </CardContent>
-            </Card>
+            <Carte titre="Avancement par projet">
+              <GrapheAvancement data={pointsAvancement} />
+            </Carte>
 
-            <Card className="ring-border">
-              <CardHeader>
-                <CardTitle>Répartition par statut</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-2">
-                <GrapheStatuts data={pointsStatut} />
-              </CardContent>
-            </Card>
+            <Carte titre="Répartition par statut">
+              <GrapheStatuts data={pointsStatut} />
+            </Carte>
           </div>
 
-          <Card className="ring-border">
-            <CardHeader className="flex-row items-center justify-between gap-4">
-              <CardTitle>Projets en cours</CardTitle>
+          <Carte
+            titre="Projets en cours"
+            contenuClassName="px-0"
+            action={
               <Link
                 href="/projets"
                 className="text-xs text-muted-foreground underline-offset-4 hover:text-brand hover:underline"
               >
                 Tout voir
               </Link>
-            </CardHeader>
-            <CardContent className="px-0">
+            }
+          >
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -185,19 +176,21 @@ export default async function VueDEnsemble(props: PageProps<'/'>) {
                   ) : null}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
+          </Carte>
         </div>
 
         <aside className="min-w-0 space-y-6">
-          <Card className="ring-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="size-4 text-brand" strokeWidth={1.75} />
+          <Carte
+            rail
+            contenuClassName="space-y-4"
+            titre={
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="size-4 text-bad drop-shadow-[0_0_6px_var(--bad)]" strokeWidth={1.75} />
                 Blocages critiques
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              </span>
+            }
+          >
+            <>
               {blocages.map((b) => {
                 const contenu = (
                   <>
@@ -237,14 +230,11 @@ export default async function VueDEnsemble(props: PageProps<'/'>) {
               {blocages.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Aucun blocage ouvert.</p>
               ) : null}
-            </CardContent>
-          </Card>
+            </>
+          </Carte>
 
-          <Card className="ring-border">
-            <CardHeader>
-              <CardTitle>Activité récente</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <Carte titre="Activité récente" rail contenuClassName="space-y-4">
+            <>
               {activite.map((a) => {
                 const contenu = (
                   <div className="min-w-0">
@@ -276,8 +266,8 @@ export default async function VueDEnsemble(props: PageProps<'/'>) {
               {activite.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Rien à signaler.</p>
               ) : null}
-            </CardContent>
-          </Card>
+            </>
+          </Carte>
         </aside>
       </div>
     </div>

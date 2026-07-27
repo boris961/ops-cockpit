@@ -37,7 +37,14 @@ export function GrapheAvancement({ data }: { data: PointAvancement[] }) {
         margin={{ top: 4, right: 44, bottom: 4, left: 4 }}
         barCategoryGap={10}
       >
-        <CartesianGrid horizontal={false} stroke="var(--border)" strokeWidth={1} />
+        <defs>
+          {/* Dégradé violet -> indigo, dans le sens de la barre. */}
+          <linearGradient id="degradeAvancement" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--brand-fonce)" />
+            <stop offset="100%" stopColor="var(--brand-clair)" />
+          </linearGradient>
+        </defs>
+        <CartesianGrid horizontal={false} stroke="rgb(255 255 255 / 0.07)" strokeWidth={1} />
         <XAxis
           type="number"
           domain={[0, 100]}
@@ -56,21 +63,27 @@ export function GrapheAvancement({ data }: { data: PointAvancement[] }) {
           tick={{ fill: 'var(--foreground)', fontSize: 12 }}
         />
         <Tooltip
-          cursor={{ fill: 'var(--sand)' }}
+          cursor={{ fill: 'rgb(255 255 255 / 0.05)' }}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null
             const point = payload[0].payload as PointAvancement
             return (
-              <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs shadow-sm">
+              <div className="verre rounded-lg bg-popover px-3 py-2 text-xs ring-1 ring-white/15">
                 <p className="font-medium">{point.nom}</p>
                 <p className="mt-0.5 text-muted-foreground">
-                  Avancement <span className="tabular-nums text-foreground">{point.avancement}%</span>
+                  Avancement{' '}
+                  <span className="text-brand-clair tabular-nums">{point.avancement}%</span>
                 </p>
               </div>
             )
           }}
         />
-        <Bar dataKey="avancement" fill="var(--brand)" barSize={14} radius={[0, 4, 4, 0]}>
+        <Bar
+          dataKey="avancement"
+          fill="url(#degradeAvancement)"
+          barSize={14}
+          radius={[0, 4, 4, 0]}
+        >
           <LabelList
             dataKey="avancement"
             position="right"

@@ -145,6 +145,7 @@ export async function getProjet(id: string) {
       owner: true,
       membres: { orderBy: { name: 'asc' } },
       taches: {
+        include: { owner: true },
         // L'ordre de l'enum TaskStatus suit le flux BACKLOG -> TERMINE.
         orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
       },
@@ -156,6 +157,14 @@ export async function getProjet(id: string) {
         include: { actor: true },
         orderBy: { createdAt: 'desc' },
         take: 20,
+      },
+      notes: {
+        include: { auteur: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+      },
+      replays: {
+        // Les calls dates d'abord, du plus recent au plus ancien.
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       },
     },
   })
@@ -182,6 +191,78 @@ export async function getPorteurs() {
     where: { id: { in: groupes.map((groupe) => groupe.ownerId) } },
     select: { id: true, name: true },
     orderBy: { name: 'asc' },
+  })
+}
+
+/**
+ * Charge par personne : taches assignees dans le perimetre visible, reparties
+ * en « a faire » / « en cours » / « terminees ».
+ */
+export async function getCharge({ porteur }: Filtres = {}) {
+  const utilisateur = await utilisateurCourant()
+
+  const taches = await prisma.task.findMany({
+    // Les projets archives ne pesent plus sur la charge de personne.
+    where: {
+      project: {
+        AND: [porteeProjets(utilisateur), filtreOwner(porteur), { status: { not: 'ARCHIVE' } }],
+      },
+    },
+    select: { status: true, owner: { select: { id: true, name: true } } },
+  })
+
+  const parPersonne = new Map<
+    string,
+    { id: string; nom: string; aFaire: number; enCours: number; terminees: number; total: number }
+  >()
+
+  for (const tache of taches) {
+    const cle = tache.owner?.id ?? 'non-assigne'
+    const ligne = parPersonne.get(cle) ?? {
+      id: cle,
+      nom: tache.owner?.name ?? 'Non assignées',
+      aFaire: 0,
+      enCours: 0,
+      terminees: 0,
+      total: 0,
+    }
+
+    if (tache.status === 'TERMINE') ligne.terminees += 1
+    else if (tache.status === 'EN_COURS' || tache.status === 'EN_REVIEW') ligne.enCours += 1
+    else ligne.aFaire += 1
+    ligne.total += 1
+
+    parPersonne.set(cle, ligne)
+  }
+
+  const lignes = [...parPersonne.values()].sort((a, b) => b.total - a.total)
+
+  // Les taches sans responsable ferment la liste : ce n'est la charge de personne.
+  return [
+    ...lignes.filter((ligne) => ligne.id !== 'non-assigne'),
+    ...lignes.filter((ligne) => ligne.id === 'non-assigne'),
+  ]
+}
+
+/**
+ * Taches datees, de la plus urgente a la plus lointaine. Un utilisateur voit
+ * les taches de ses projets et celles qui lui sont assignees ; COO / HEAD
+ * voient tout.
+ */
+export async function getTachesAVenir() {
+  const utilisateur = await utilisateurCourant()
+  if (!utilisateur) return []
+
+  return prisma.task.findMany({
+    where: {
+      echeance: { not: null },
+      OR: [{ project: porteeProjets(utilisateur) }, { ownerId: utilisateur.id }],
+    },
+    include: {
+      owner: { select: { id: true, name: true } },
+      project: { select: { id: true, nom: true } },
+    },
+    orderBy: { echeance: 'asc' },
   })
 }
 

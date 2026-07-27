@@ -33,7 +33,7 @@ export function FiltrePorteur({
         id="filtre-porteur"
         value={actuel}
         onChange={(evenement) => changer(evenement.target.value)}
-        className="h-8 rounded-lg border border-border bg-background px-2 text-sm outline-none transition-colors focus:border-brand focus:ring-3 focus:ring-brand/15"
+        className="h-8 rounded-lg border border-white/10 bg-champ px-2 text-sm outline-none transition-all focus:border-brand/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-brand/20 [&>option]:bg-popover [&>option]:text-foreground"
       >
         <option value="">Tous</option>
         {porteurs.map((porteur) => (

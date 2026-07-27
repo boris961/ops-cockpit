@@ -2,16 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Identite Entrepreneurs : clair uniquement. La variante `dark` reste liee a une
-   classe `.dark` qui n'est jamais posee, donc aucune version sombre ne s'active. */
+/* Thème sombre unique. La variante `dark` reste liée à une classe `.dark`
+   jamais posée : il n'y a plus qu'un seul habillage, celui-ci. */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-montserrat);
-  --font-mono: var(--font-montserrat);
-  --font-heading: var(--font-caslon);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-inter);
+  --font-heading: var(--font-inter);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -41,15 +41,24 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  /* Palette de marque */
+
+  /* Accent et couches de verre */
   --color-brand: var(--brand);
   --color-brand-fonce: var(--brand-fonce);
+  --color-brand-clair: var(--brand-clair);
   --color-sand: var(--sand);
+  --color-rail: var(--rail);
+  --color-champ: var(--champ);
+  --color-attente: var(--attente);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+
+  --shadow-carte: var(--ombre-carte);
+  --shadow-halo: var(--halo-violet);
+
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.7);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
@@ -58,65 +67,186 @@
 }
 
 :root {
-  /* Marque */
-  --brand: #ef3340;
-  /* Rouge assombri pour les aplats portant du texte blanc (4.6:1 au lieu de 3.4:1). */
-  --brand-fonce: #ce1f2e;
-  --sand: #f7f6f3;
-  /* Statuts satures : chacun tient le 4.5:1 sur blanc, donc lisible en texte. */
-  --ok: #00875a;
-  --warn: #b45309;
-  --bad: #dc2626;
+  /* — Fond — */
+  --fond: #0a0a12;
+  --fond-haut: #12121f;
 
-  --background: #ffffff;
-  --foreground: #000000;
-  --card: #ffffff;
-  --card-foreground: #000000;
-  --popover: #ffffff;
-  --popover-foreground: #000000;
-  --primary: #000000;
+  /* — Accent violet / indigo — */
+  --brand: #7c6bf5;
+  --brand-clair: #9d8dff;
+  --brand-fonce: #5b4bd6;
+
+  /* — Verre —
+     Les surfaces de cadre sont des bases SOMBRES quasi opaques : le décor
+     (arches, halos, étoiles) ne doit jamais transparaître sous un contenu.
+     L'effet verre vient du voile clair, de la bordure et de l'ombre, pas de
+     la transparence. Le flou n'est qu'un bonus : l'opacité seule suffit. */
+  --verre: rgb(22 22 31 / 0.96);
+  --verre-rail: rgb(18 18 28 / 0.96);
+  --verre-bord: rgb(255 255 255 / 0.1);
+  /* Strates internes, posées sur une carte déjà opaque : blanc translucide. */
+  --sand: rgb(255 255 255 / 0.07);
+  --rail: var(--verre-rail);
+  /* Champs de saisie : base opaque un cran plus claire que la carte. */
+  --champ: rgb(32 32 46 / 0.96);
+  --attente: #6b6b8f;
+
+  /* — Statuts, versions lumineuses lisibles sur fond sombre (>= 6:1) — */
+  --ok: #3ddc97;
+  --warn: #ffb02e;
+  --bad: #ff5c72;
+
+  /* — Ombres et lueurs — */
+  --ombre-carte: 0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 18px 40px -24px rgb(0 0 0 / 0.9),
+    0 2px 8px -4px rgb(0 0 0 / 0.5);
+  --halo-violet: 0 8px 28px -10px rgb(124 107 245 / 0.65);
+
+  /* — Jetons shadcn — */
+  --background: var(--fond);
+  --foreground: #ececf5;
+  --card: var(--verre);
+  --card-foreground: #ececf5;
+  --popover: #16162a;
+  --popover-foreground: #ececf5;
+  --primary: #7c6bf5;
   --primary-foreground: #ffffff;
-  --secondary: #f7f6f3;
-  --secondary-foreground: #000000;
-  --muted: #f7f6f3;
-  /* Texte secondaire : 7:1 sur blanc, il ne doit plus se derober. */
-  --muted-foreground: #55514a;
-  --accent: #f7f6f3;
-  --accent-foreground: #000000;
-  --destructive: #dc2626;
-  --border: #d8d3c8;
-  --input: #d8d3c8;
-  --ring: #ef3340;
+  --secondary: rgb(255 255 255 / 0.06);
+  --secondary-foreground: #ececf5;
+  --muted: rgb(255 255 255 / 0.05);
+  --muted-foreground: #9a9ab5;
+  --accent: rgb(255 255 255 / 0.08);
+  --accent-foreground: #ffffff;
+  --destructive: #ff5c72;
+  --border: rgb(255 255 255 / 0.1);
+  --input: rgb(255 255 255 / 0.12);
+  --ring: #7c6bf5;
 
-  /* Statuts projet — palette validee : les 6 controles passent (bande de
-     luminosite, plancher de chroma, separation CVD, contraste >= 3:1), et la
-     legende reste chiffree : jamais la couleur seule. */
-  --chart-1: #9a5518; /* Cadrage */
-  --chart-2: #1d4ed8; /* En cours */
-  --chart-3: #d97706; /* A risque */
-  --chart-4: #7c3aed; /* En validation */
-  --chart-5: #00875a; /* Termine */
+  /* Statuts projet — palette validée sur fond sombre : les 6 contrôles passent
+     (bande de luminosité dark, chroma, séparation CVD, contraste >= 3:1). */
+  --chart-1: #1e9fcc; /* Cadrage */
+  --chart-2: #7c6bf5; /* En cours */
+  --chart-3: #c9821f; /* À risque */
+  --chart-4: #c558cc; /* En validation */
+  --chart-5: #17a56e; /* Terminé */
 
-  --radius: 0.75rem;
+  --radius: 1rem;
 
-  --sidebar: #f7f6f3;
-  --sidebar-foreground: #000000;
-  --sidebar-primary: #ef3340;
+  --sidebar: var(--verre-rail);
+  --sidebar-foreground: #ececf5;
+  --sidebar-primary: #7c6bf5;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ffffff;
-  --sidebar-accent-foreground: #000000;
-  --sidebar-border: #e6e3dc;
-  --sidebar-ring: #ef3340;
+  --sidebar-accent: rgb(255 255 255 / 0.06);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: #7c6bf5;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+
   html {
     @apply font-sans;
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* Halo violet en haut, contre-jour indigo à droite : le dégradé est fixe,
+       il ne suit pas le défilement. */
+    background-image:
+      radial-gradient(1100px 560px at 50% -14%, rgb(124 107 245 / 0.2), transparent 70%),
+      radial-gradient(760px 520px at 104% 4%, rgb(91 75 214 / 0.14), transparent 66%);
+    background-attachment: fixed;
+  }
+
+  /* Décor : arches lumineuses + poussière d'étoiles, très faible opacité,
+     posé derrière le contenu (z-index négatif) et non interactif. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      radial-gradient(circle at 50% 128%, transparent 61.6%, rgb(124 107 245 / 0.16) 62%, transparent 62.5%),
+      radial-gradient(circle at 50% 132%, transparent 71.6%, rgb(157 141 255 / 0.1) 72%, transparent 72.6%),
+      radial-gradient(circle at 12% -12%, transparent 39.6%, rgb(124 107 245 / 0.1) 40%, transparent 40.5%),
+      radial-gradient(ellipse 90% 60% at 50% 50%, transparent 40%, rgb(0 0 0 / 0.55) 100%);
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.5;
+    background-image:
+      radial-gradient(1.4px 1.4px at 12% 18%, rgb(255 255 255 / 0.55), transparent),
+      radial-gradient(1.2px 1.2px at 28% 62%, rgb(200 214 255 / 0.45), transparent),
+      radial-gradient(1px 1px at 41% 12%, rgb(255 255 255 / 0.4), transparent),
+      radial-gradient(1.6px 1.6px at 57% 78%, rgb(180 168 255 / 0.5), transparent),
+      radial-gradient(1px 1px at 66% 33%, rgb(255 255 255 / 0.4), transparent),
+      radial-gradient(1.3px 1.3px at 74% 8%, rgb(210 220 255 / 0.45), transparent),
+      radial-gradient(1px 1px at 83% 55%, rgb(255 255 255 / 0.35), transparent),
+      radial-gradient(1.5px 1.5px at 92% 26%, rgb(190 178 255 / 0.5), transparent),
+      radial-gradient(1px 1px at 6% 84%, rgb(255 255 255 / 0.35), transparent),
+      radial-gradient(1.2px 1.2px at 35% 92%, rgb(210 220 255 / 0.4), transparent),
+      radial-gradient(1px 1px at 88% 88%, rgb(255 255 255 / 0.3), transparent),
+      radial-gradient(1.4px 1.4px at 50% 45%, rgb(180 168 255 / 0.35), transparent);
+  }
+
+  ::selection {
+    background: rgb(124 107 245 / 0.35);
+  }
+}
+
+@layer components {
+  /* Surface de verre. La couleur de fond est posée ici pour qu'un conteneur
+     sans utilitaire `bg-*` reste opaque ; les cartes qui portent `bg-card` /
+     `bg-rail` / `bg-sidebar` la remplacent par une base tout aussi opaque. */
+  .verre {
+    background-color: var(--verre);
+    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0) 42%);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    box-shadow: var(--ombre-carte);
+  }
+
+  /* Aplat violet des actions primaires : dégradé + halo + liseré interne. */
+  .violet-plein {
+    background-image: linear-gradient(135deg, var(--brand-clair), var(--brand-fonce));
+    color: #fff;
+    box-shadow:
+      var(--halo-violet),
+      inset 0 1px 0 rgb(255 255 255 / 0.25);
+  }
+  .violet-plein:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+
+  /* Onglets (Liste / Kanban / Charge, Détail / Suivi) : barre de verre et
+     pilule violette sur l'onglet actif. Centralisé ici pour rester cohérent. */
+  [data-slot='tabs-list'] {
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  [data-slot='tabs-trigger'][data-active] {
+    background-image: linear-gradient(135deg, rgb(157 141 255 / 0.95), rgb(91 75 214 / 0.9));
+    box-shadow:
+      0 6px 18px -8px rgb(124 107 245 / 0.9),
+      inset 0 1px 0 rgb(255 255 255 / 0.22);
+  }
+
+  /* Pilule de navigation active. */
+  .nav-actif {
+    background-image: linear-gradient(135deg, rgb(124 107 245 / 0.32), rgb(91 75 214 / 0.16));
+    box-shadow:
+      inset 0 0 0 1px rgb(124 107 245 / 0.45),
+      0 10px 26px -14px rgb(124 107 245 / 0.9);
   }
 }

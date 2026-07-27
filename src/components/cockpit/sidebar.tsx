@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { FolderKanban, LayoutDashboard, Users } from 'lucide-react'
+import { CalendarClock, FolderKanban, LayoutDashboard, Users } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { ROLE_LABEL, initiales } from '@/lib/cockpit'
@@ -10,6 +10,7 @@ import { ROLE_LABEL, initiales } from '@/lib/cockpit'
 const NAV = [
   { href: '/', label: "Vue d'ensemble", icon: LayoutDashboard },
   { href: '/projets', label: 'Projets', icon: FolderKanban },
+  { href: '/taches', label: 'Tâches à venir', icon: CalendarClock },
 ] as const
 
 const NAV_ADMIN = { href: '/utilisateurs', label: 'Utilisateurs', icon: Users } as const
@@ -26,14 +27,14 @@ export function Sidebar({
   const entrees = admin ? [...NAV, NAV_ADMIN] : NAV
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
-      <div className="px-6 py-7">
+    <aside className="verre sticky top-4 m-4 flex h-[calc(100vh-2rem)] w-60 shrink-0 flex-col rounded-xl bg-sidebar ring-1 ring-white/10">
+      <div className="px-5 py-6">
         <Link href="/" className="block">
-          <span className="font-heading text-lg leading-none tracking-tight">
+          <span className="text-lg leading-none font-semibold tracking-tight">
             Entrepreneurs
           </span>
           <span className="text-brand">.</span>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="mt-1.5 text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
             Ops cockpit
           </p>
         </Link>
@@ -48,22 +49,30 @@ export function Sidebar({
               href={href}
               aria-current={actif ? 'page' : undefined}
               className={cn(
-                'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all',
                 actif
-                  ? 'bg-brand/10 font-semibold text-brand shadow-[inset_3px_0_0_0_var(--brand)]'
-                  : 'text-foreground/75 hover:bg-background hover:text-foreground',
+                  ? 'nav-actif font-semibold text-white'
+                  : 'text-foreground/70 hover:bg-white/[0.05] hover:text-foreground',
               )}
             >
-              <Icone className="size-4 shrink-0" strokeWidth={1.75} />
+              <Icone
+                className={cn(
+                  'size-4 shrink-0 transition-all',
+                  actif
+                    ? 'text-brand-clair drop-shadow-[0_0_6px_var(--brand)]'
+                    : 'text-muted-foreground group-hover:text-foreground',
+                )}
+                strokeWidth={1.75}
+              />
               {label}
             </Link>
           )
         })}
       </nav>
 
-      <div className="mt-auto border-t border-border px-4 py-4">
-        <div className="flex items-center gap-3">
-          <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-background text-[11px] font-medium text-foreground ring-1 ring-border">
+      <div className="mt-auto border-t border-white/8 px-4 py-4">
+        <div className="flex items-center gap-3 rounded-lg bg-white/[0.04] p-2 ring-1 ring-white/8">
+          <span className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand/20 text-[11px] font-semibold text-brand-clair ring-1 ring-brand/30">
             {utilisateur.image ? (
               // eslint-disable-next-line @next/next/no-img-element -- avatar Google, hors pipeline next/image
               <img src={utilisateur.image} alt="" className="size-full object-cover" />

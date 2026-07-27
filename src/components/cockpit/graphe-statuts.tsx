@@ -32,7 +32,7 @@ export function GrapheStatuts({ data }: { data: PointStatut[] }) {
               innerRadius={58}
               outerRadius={86}
               paddingAngle={2}
-              stroke="var(--background)"
+              stroke="var(--fond)"
               strokeWidth={2}
               isAnimationActive={false}
             >
@@ -45,10 +45,10 @@ export function GrapheStatuts({ data }: { data: PointStatut[] }) {
                 if (!active || !payload?.length) return null
                 const point = payload[0].payload as PointStatut
                 return (
-                  <div className="rounded-lg border border-border bg-background px-3 py-2 text-xs shadow-sm">
+                  <div className="verre rounded-lg bg-popover px-3 py-2 text-xs ring-1 ring-white/15">
                     <p className="font-medium">{STATUT_LABEL[point.statut] ?? point.statut}</p>
                     <p className="mt-0.5 text-muted-foreground">
-                      <span className="tabular-nums text-foreground">{point.valeur}</span>{' '}
+                      <span className="text-foreground tabular-nums">{point.valeur}</span>{' '}
                       {point.valeur > 1 ? 'projets' : 'projet'} ·{' '}
                       {Math.round((point.valeur / total) * 100)}%
                     </p>
@@ -59,8 +59,8 @@ export function GrapheStatuts({ data }: { data: PointStatut[] }) {
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-heading text-3xl leading-none">{total}</span>
-          <span className="mt-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+          <span className="text-3xl leading-none font-light tabular-nums">{total}</span>
+          <span className="mt-1.5 text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
             projets
           </span>
         </div>
@@ -72,7 +72,10 @@ export function GrapheStatuts({ data }: { data: PointStatut[] }) {
             <span
               aria-hidden
               className="size-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: STATUT_COLOR[d.statut] }}
+              style={{
+                backgroundColor: STATUT_COLOR[d.statut],
+                boxShadow: `0 0 10px -1px ${STATUT_COLOR[d.statut]}`,
+              }}
             />
             <span className="min-w-0 flex-1 truncate">{STATUT_LABEL[d.statut] ?? d.statut}</span>
             <span className="tabular-nums">{d.valeur}</span>

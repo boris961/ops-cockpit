@@ -5,12 +5,13 @@ import { CalendarClock, Pencil, Plus, X } from 'lucide-react'
 
 import { creerTache, modifierTache, supprimerTache } from '@/lib/actions'
 import { ETAT_INITIAL } from '@/lib/action-state'
-import { PRIORITE_LABEL } from '@/lib/cockpit'
+import { PRIORITE_LABEL, initiales } from '@/lib/cockpit'
 import { cn } from '@/lib/utils'
 import {
   BoutonSoumettre,
   MessageEtat,
   classeChamp,
+  classeChampCompact,
   classeLibelle,
 } from '@/components/cockpit/formulaire'
 
@@ -23,7 +24,12 @@ export type TacheItem = {
   echeance: string | null
   echeanceLisible: string | null
   enRetard: boolean
+  responsableId: string | null
+  responsableNom: string | null
 }
+
+/** Personnes assignables : directeur du projet + membres de l'equipe. */
+export type Assignable = { id: string; name: string }
 
 const STATUTS_TACHE = [
   { valeur: 'BACKLOG', libelle: 'Backlog' },
@@ -38,10 +44,12 @@ const PRIORITES = ['P0', 'P1', 'P2', 'P3']
 export function TachesProjet({
   projectId,
   taches,
+  assignables,
   modifiable,
 }: {
   projectId: string
   taches: TacheItem[]
+  assignables: Assignable[]
   modifiable: boolean
 }) {
   const terminees = taches.filter((t) => t.status === 'TERMINE').length
@@ -57,23 +65,42 @@ export function TachesProjet({
       {taches.length > 0 ? (
         <ul className="divide-y divide-border border-y border-border">
           {taches.map((tache) => (
-            <LigneTache key={tache.id} tache={tache} modifiable={modifiable} />
+            <LigneTache
+              key={tache.id}
+              tache={tache}
+              assignables={assignables}
+              modifiable={modifiable}
+            />
           ))}
         </ul>
       ) : null}
 
-      {modifiable ? <FormulaireNouvelleTache projectId={projectId} /> : null}
+      {modifiable ? (
+        <FormulaireNouvelleTache projectId={projectId} assignables={assignables} />
+      ) : null}
     </div>
   )
 }
 
-function LigneTache({ tache, modifiable }: { tache: TacheItem; modifiable: boolean }) {
+function LigneTache({
+  tache,
+  assignables,
+  modifiable,
+}: {
+  tache: TacheItem
+  assignables: Assignable[]
+  modifiable: boolean
+}) {
   const [edition, setEdition] = useState(false)
 
   if (edition) {
     return (
       <li className="py-3">
-        <FormulaireEditionTache tache={tache} onFerme={() => setEdition(false)} />
+        <FormulaireEditionTache
+          tache={tache}
+          assignables={assignables}
+          onFerme={() => setEdition(false)}
+        />
       </li>
     )
   }
@@ -92,6 +119,8 @@ function LigneTache({ tache, modifiable }: { tache: TacheItem; modifiable: boole
       >
         {tache.titre}
       </span>
+
+      <SelectResponsable tache={tache} assignables={assignables} modifiable={modifiable} />
 
       {tache.priorite ? <PucePriorite priorite={tache.priorite} /> : null}
 
@@ -122,6 +151,79 @@ function LigneTache({ tache, modifiable }: { tache: TacheItem; modifiable: boole
         </div>
       ) : null}
     </li>
+  )
+}
+
+/** Pastille d'initiales du responsable, ou tiret si la tache n'est assignee a personne. */
+function PastilleResponsable({ nom }: { nom: string | null }) {
+  return (
+    <span
+      title={nom ?? 'Non assignée'}
+      className={cn(
+        'flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ring-1',
+        nom
+          ? 'bg-brand/20 text-brand-clair ring-brand/30'
+          : 'bg-white/[0.03] text-muted-foreground/60 ring-white/12 ring-dashed',
+      )}
+    >
+      {nom ? initiales(nom) : '—'}
+      <span className="sr-only">{nom ? `Responsable : ${nom}` : 'Non assignée'}</span>
+    </span>
+  )
+}
+
+function SelectResponsable({
+  tache,
+  assignables,
+  modifiable,
+}: {
+  tache: TacheItem
+  assignables: Assignable[]
+  modifiable: boolean
+}) {
+  const [etat, action, enCours] = useActionState(modifierTache, ETAT_INITIAL)
+
+  if (!modifiable) {
+    return (
+      <span className="flex shrink-0 items-center gap-2">
+        <PastilleResponsable nom={tache.responsableNom} />
+        <span className="text-xs text-muted-foreground">{tache.responsableNom ?? 'Non assignée'}</span>
+      </span>
+    )
+  }
+
+  // Un responsable sorti de l'equipe garde son option, sinon le select
+  // afficherait « Non assignée » alors que la tache lui reste confiee.
+  const options =
+    tache.responsableId && !assignables.some((personne) => personne.id === tache.responsableId)
+      ? [...assignables, { id: tache.responsableId, name: tache.responsableNom ?? 'Hors équipe' }]
+      : assignables
+
+  return (
+    <form action={action} className="flex shrink-0 items-center gap-2">
+      <input type="hidden" name="tacheId" value={tache.id} />
+      <PastilleResponsable nom={tache.responsableNom} />
+      <label className="sr-only" htmlFor={`responsable-${tache.id}`}>
+        Responsable de la tâche {tache.titre}
+      </label>
+      <select
+        id={`responsable-${tache.id}`}
+        name="ownerId"
+        key={tache.responsableId ?? 'aucun'}
+        defaultValue={tache.responsableId ?? ''}
+        disabled={enCours}
+        onChange={(evenement) => evenement.currentTarget.form?.requestSubmit()}
+        className={`${classeChampCompact} w-32`}
+      >
+        <option value="">Non assignée</option>
+        {options.map((personne) => (
+          <option key={personne.id} value={personne.id}>
+            {personne.name}
+          </option>
+        ))}
+      </select>
+      <MessageEtat etat={etat} />
+    </form>
   )
 }
 
@@ -199,15 +301,17 @@ function FormulaireSuppressionTache({ tache }: { tache: TacheItem }) {
 
 function FormulaireEditionTache({
   tache,
+  assignables,
   onFerme,
 }: {
   tache: TacheItem
+  assignables: Assignable[]
   onFerme: () => void
 }) {
   const [etat, action] = useActionState(modifierTache, ETAT_INITIAL)
 
   return (
-    <form action={action} className="space-y-3 rounded-lg bg-sand p-3">
+    <form action={action} className="space-y-3 rounded-lg bg-white/[0.04] p-3 ring-1 ring-white/10">
       <input type="hidden" name="tacheId" value={tache.id} />
 
       <div className="space-y-1.5">
@@ -276,6 +380,25 @@ function FormulaireEditionTache({
         </div>
       </div>
 
+      <div className="space-y-1.5">
+        <label htmlFor={`edit-responsable-${tache.id}`} className={classeLibelle}>
+          Responsable
+        </label>
+        <select
+          id={`edit-responsable-${tache.id}`}
+          name="ownerId"
+          defaultValue={tache.responsableId ?? ''}
+          className={classeChamp}
+        >
+          <option value="">Non assignée</option>
+          {assignables.map((personne) => (
+            <option key={personne.id} value={personne.id}>
+              {personne.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex items-center gap-3">
         <BoutonSoumettre>Enregistrer</BoutonSoumettre>
         <button
@@ -291,7 +414,13 @@ function FormulaireEditionTache({
   )
 }
 
-function FormulaireNouvelleTache({ projectId }: { projectId: string }) {
+function FormulaireNouvelleTache({
+  projectId,
+  assignables,
+}: {
+  projectId: string
+  assignables: Assignable[]
+}) {
   const [etat, action] = useActionState(creerTache, ETAT_INITIAL)
   const formulaire = useRef<HTMLFormElement>(null)
 
@@ -353,6 +482,25 @@ function FormulaireNouvelleTache({ projectId }: { projectId: string }) {
             type="date"
             className={classeChamp}
           />
+        </div>
+
+        <div className="w-44 space-y-1.5">
+          <label htmlFor={`nouvelle-responsable-${projectId}`} className={classeLibelle}>
+            Responsable
+          </label>
+          <select
+            id={`nouvelle-responsable-${projectId}`}
+            name="ownerId"
+            defaultValue=""
+            className={classeChamp}
+          >
+            <option value="">Non assignée</option>
+            {assignables.map((personne) => (
+              <option key={personne.id} value={personne.id}>
+                {personne.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <BoutonSoumettre>

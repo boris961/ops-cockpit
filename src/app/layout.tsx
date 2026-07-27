@@ -1,22 +1,15 @@
 import type { Metadata } from 'next'
-import { Libre_Caslon_Display, Montserrat } from 'next/font/google'
+import { Inter } from 'next/font/google'
 
 import { auth } from '@/auth'
 import { estAdmin, utilisateurCourant } from '@/lib/autorisation'
 import { Sidebar } from '@/components/cockpit/sidebar'
 import './globals.css'
 
-const caslon = Libre_Caslon_Display({
-  weight: '400',
+const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
-  variable: '--font-caslon',
-})
-
-const montserrat = Montserrat({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-montserrat',
+  variable: '--font-inter',
 })
 
 export const metadata: Metadata = {
@@ -35,10 +28,7 @@ export default async function RootLayout({
   const compte = utilisateur ? await utilisateurCourant() : null
 
   return (
-    <html
-      lang="fr"
-      className={`${montserrat.variable} ${caslon.variable} h-full antialiased`}
-    >
+    <html lang="fr" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full bg-background">
         {/* Hors session (ecran de connexion), on rend la page seule : la coquille
             de navigation n'a pas de sens sans utilisateur. */}

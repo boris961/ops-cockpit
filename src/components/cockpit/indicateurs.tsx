@@ -17,9 +17,12 @@ export function BarreAvancement({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label="Avancement"
-      className={cn('h-1.5 w-full overflow-hidden rounded-full bg-sand', className)}
+      className={cn('h-1.5 w-full overflow-hidden rounded-full bg-white/8', className)}
     >
-      <div className="h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
+      <div
+        className="h-full rounded-full bg-gradient-to-r from-brand-clair to-brand-fonce shadow-[0_0_10px_-1px_var(--brand)]"
+        style={{ width: `${pct}%` }}
+      />
     </div>
   )
 }
@@ -51,12 +54,20 @@ export function PastilleSante({
 }) {
   const couleur = SANTE_COLOR[sante] ?? 'var(--muted-foreground)'
   const libelle = SANTE_LABEL[sante] ?? sante
+
+  // Badge de verre teinte : pastille lumineuse + libelle, jamais la couleur seule.
   return (
-    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+    <span
+      className="inline-flex items-center gap-2 rounded-full border px-2 py-0.5 whitespace-nowrap"
+      style={{
+        borderColor: `color-mix(in oklab, ${couleur} 35%, transparent)`,
+        backgroundColor: `color-mix(in oklab, ${couleur} 12%, transparent)`,
+      }}
+    >
       <span
         aria-hidden
-        className="size-2.5 shrink-0 rounded-full"
-        style={{ backgroundColor: couleur }}
+        className="size-1.5 shrink-0 rounded-full"
+        style={{ backgroundColor: couleur, boxShadow: `0 0 8px ${couleur}` }}
       />
       {avecLibelle ? (
         <span className="text-xs font-medium" style={{ color: couleur }}>
@@ -83,7 +94,7 @@ export function BadgesDepartements({
       {departements.map((departement) => (
         <span
           key={departement}
-          className="inline-flex items-center rounded-full bg-sand px-2 py-0.5 text-[10px] font-medium tracking-wide text-foreground/80"
+          className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium tracking-wide text-foreground/75"
         >
           {departement}
         </span>
@@ -95,11 +106,14 @@ export function BadgesDepartements({
 /** Statut projet : puce fine, encre noire, marqueur colore. */
 export function PuceStatut({ statut }: { statut: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-2 py-0.5 text-xs font-medium">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-xs font-medium whitespace-nowrap">
       <span
         aria-hidden
-        className="size-2 shrink-0 rounded-full"
-        style={{ backgroundColor: STATUT_COLOR[statut] ?? 'var(--muted-foreground)' }}
+        className="size-1.5 shrink-0 rounded-full"
+        style={{
+          backgroundColor: STATUT_COLOR[statut] ?? 'var(--muted-foreground)',
+          boxShadow: `0 0 8px ${STATUT_COLOR[statut] ?? 'transparent'}`,
+        }}
       />
       {STATUT_LABEL[statut] ?? statut}
     </span>

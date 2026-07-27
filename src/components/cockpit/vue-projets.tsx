@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { AlertTriangle, Flag, LayoutGrid, List } from 'lucide-react'
+import { AlertTriangle, Flag, LayoutGrid, List, Users } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -21,6 +21,7 @@ import {
   PastilleSante,
   PuceStatut,
 } from '@/components/cockpit/indicateurs'
+import { VueCharge, type LigneCharge } from '@/components/cockpit/vue-charge'
 
 export type ProjetItem = {
   id: string
@@ -34,10 +35,16 @@ export type ProjetItem = {
   departements: string[]
 }
 
-export function VueProjets({ projets }: { projets: ProjetItem[] }) {
+export function VueProjets({
+  projets,
+  charge,
+}: {
+  projets: ProjetItem[]
+  charge: LigneCharge[]
+}) {
   return (
     <Tabs defaultValue="liste" className="gap-4">
-      <TabsList className="self-start">
+      <TabsList className="self-start bg-card">
         <TabsTrigger value="liste" className="px-3">
           <List className="size-4" strokeWidth={1.75} />
           Liste
@@ -45,6 +52,10 @@ export function VueProjets({ projets }: { projets: ProjetItem[] }) {
         <TabsTrigger value="kanban" className="px-3">
           <LayoutGrid className="size-4" strokeWidth={1.75} />
           Kanban
+        </TabsTrigger>
+        <TabsTrigger value="charge" className="px-3">
+          <Users className="size-4" strokeWidth={1.75} />
+          Charge
         </TabsTrigger>
       </TabsList>
 
@@ -55,13 +66,17 @@ export function VueProjets({ projets }: { projets: ProjetItem[] }) {
       <TabsContent value="kanban">
         <VueKanban projets={projets} />
       </TabsContent>
+
+      <TabsContent value="charge">
+        <VueCharge lignes={charge} />
+      </TabsContent>
     </Tabs>
   )
 }
 
 function VueListe({ projets }: { projets: ProjetItem[] }) {
   return (
-    <Card className="ring-border">
+    <Card className="verre rounded-xl ring-1 ring-white/10">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -145,7 +160,7 @@ function VueKanban({ projets }: { projets: ProjetItem[] }) {
               <Card
                 key={p.id}
                 size="sm"
-                className="gap-3 px-4 py-4 ring-border transition-shadow hover:ring-foreground/25"
+                className="verre gap-3 rounded-xl px-4 py-4 ring-1 ring-white/10 transition-all hover:ring-brand/40 hover:shadow-halo"
               >
                 <Link
                   href={`/projets/${p.id}`}
@@ -175,7 +190,7 @@ function VueKanban({ projets }: { projets: ProjetItem[] }) {
             ))}
 
             {colonne.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+              <p className="rounded-lg border border-dashed border-white/12 bg-card px-4 py-6 text-center text-xs text-muted-foreground">
                 Aucun projet
               </p>
             ) : null}
@@ -191,7 +206,7 @@ function CompteurBlocages({ nombre }: { nombre: number }) {
     return <span className="text-xs text-muted-foreground">—</span>
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-brand">
+    <span className="inline-flex items-center gap-1 text-xs text-bad">
       <AlertTriangle className="size-3 shrink-0" strokeWidth={2} />
       <span className="tabular-nums">{nombre}</span>
       <span className="sr-only">blocage(s)</span>

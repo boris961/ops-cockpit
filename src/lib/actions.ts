@@ -12,6 +12,7 @@ import type {
 
 import { prisma } from '@/lib/prisma'
 import {
+  estAdmin,
   exigerAdmin,
   exigerUtilisateur,
   peutModifierProjet,
@@ -86,6 +87,72 @@ async function journaliser(
   await prisma.activity.create({
     data: { actorId: acteur.id, projectId, type, message },
   })
+}
+
+/**
+ * Garde de suivi : toute personne ayant acces au projet (directeur, membre ou
+ * COO / HEAD) peut y deposer des notes et des replays. Plus large que
+ * projetModifiable(), qui reste reserve au pilotage du projet lui-meme.
+ */
+async function projetAccessible(projectId: string) {
+  const utilisateur = await exigerUtilisateur()
+  if (!projectId) throw new Error('Projet manquant.')
+
+  const projet = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      ...(estAdmin(utilisateur)
+        ? {}
+        : {
+            OR: [
+              { ownerId: utilisateur.id },
+              { membres: { some: { id: utilisateur.id } } },
+            ],
+          }),
+    },
+  })
+  if (!projet) {
+    throw new Error("Accès refusé : vous n'avez pas accès à ce projet.")
+  }
+
+  return { utilisateur, projet }
+}
+
+/** N'accepte que des liens http(s) : un href `javascript:` serait executable. */
+function urlValide(brut: string) {
+  let analysee: URL
+  try {
+    analysee = new URL(brut)
+  } catch {
+    throw new Error('URL invalide — elle doit commencer par https://')
+  }
+  if (analysee.protocol !== 'https:' && analysee.protocol !== 'http:') {
+    throw new Error('Seuls les liens http(s) sont acceptés.')
+  }
+  return analysee.toString()
+}
+
+/**
+ * Responsable assignable a une tache : le directeur du projet ou un membre de
+ * l'equipe. Renvoie null pour « non assignee ».
+ */
+async function responsableAssignable(projectId: string, ownerId: string) {
+  if (!ownerId) return null
+
+  const projet = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      OR: [{ ownerId }, { membres: { some: { id: ownerId } } }],
+    },
+    select: { id: true },
+  })
+  if (!projet) {
+    throw new Error("Ce responsable ne fait pas partie de l'équipe du projet.")
+  }
+
+  const utilisateur = await prisma.user.findUnique({ where: { id: ownerId } })
+  if (!utilisateur) throw new Error('Utilisateur inconnu.')
+  return utilisateur
 }
 
 /**
@@ -337,10 +404,26 @@ export async function creerTache(
     const echeance = echeanceBrute ? new Date(echeanceBrute) : null
     if (echeance && Number.isNaN(echeance.getTime())) throw new Error('Échéance invalide.')
 
+    const responsable = await responsableAssignable(projet.id, texte(donnees, 'ownerId'))
+
     await prisma.task.create({
-      data: { projectId: projet.id, titre, status, priorite, echeance },
+      data: {
+        projectId: projet.id,
+        titre,
+        status,
+        priorite,
+        echeance,
+        ownerId: responsable?.id ?? null,
+      },
     })
-    await journaliser(utilisateur, 'TACHE_CREEE', `a créé la tâche « ${titre} »`, projet.id)
+    await journaliser(
+      utilisateur,
+      'TACHE_CREEE',
+      responsable
+        ? `a créé la tâche « ${titre} », confiée à ${responsable.name}`
+        : `a créé la tâche « ${titre} »`,
+      projet.id,
+    )
 
     revalider(projet.id)
     return SUCCES
@@ -365,6 +448,7 @@ export async function modifierTache(
       status?: TaskStatus
       priorite?: Priority | null
       echeance?: Date | null
+      ownerId?: string | null
     } = {}
     const journal: Array<{ type: ActivityType; message: string }> = []
 
@@ -423,6 +507,20 @@ export async function modifierTache(
           message: echeance
             ? `a fixé l'échéance de « ${tache.titre} » au ${echeance.toLocaleDateString('fr-FR')}`
             : `a retiré l'échéance de « ${tache.titre} »`,
+        })
+      }
+    }
+
+    if (donnees.has('ownerId')) {
+      const responsable = await responsableAssignable(projet.id, texte(donnees, 'ownerId'))
+      const nouvelId = responsable?.id ?? null
+      if (nouvelId !== tache.ownerId) {
+        data.ownerId = nouvelId
+        journal.push({
+          type: 'COMMENTAIRE',
+          message: responsable
+            ? `a confié la tâche « ${tache.titre} » à ${responsable.name}`
+            : `a retiré le responsable de la tâche « ${tache.titre} »`,
         })
       }
     }
@@ -513,6 +611,209 @@ export async function retirerMembre(
       utilisateur,
       'COMMENTAIRE',
       `a retiré ${membre.name} de l'équipe`,
+      projet.id,
+    )
+
+    revalider(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+/* ------------------------------------------------------------------ notes */
+
+export async function creerNote(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const projectId = texte(donnees, 'projectId')
+    const { utilisateur, projet } = await projetAccessible(projectId)
+
+    const contenu = texte(donnees, 'contenu')
+    if (!contenu) throw new Error('La note est vide.')
+
+    // Une note nait en brouillon ; la publication est un geste explicite.
+    const publiee = texte(donnees, 'publiee') === '1'
+
+    await prisma.note.create({
+      data: { projectId: projet.id, auteurId: utilisateur.id, contenu, publiee },
+    })
+    await journaliser(
+      utilisateur,
+      'COMMENTAIRE',
+      publiee ? 'a publié une note de suivi' : 'a rédigé une note de suivi (brouillon)',
+      projet.id,
+    )
+
+    revalider(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+/** Edite le contenu et/ou l'etat de publication d'une note. */
+export async function modifierNote(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const noteId = texte(donnees, 'noteId')
+    const note = await prisma.note.findUnique({ where: { id: noteId } })
+    if (!note) throw new Error('Note introuvable.')
+
+    const { utilisateur, projet } = await projetAccessible(note.projectId)
+
+    const data: { contenu?: string; publiee?: boolean } = {}
+    const journal: string[] = []
+
+    if (donnees.has('contenu')) {
+      const contenu = texte(donnees, 'contenu')
+      if (!contenu) throw new Error('La note ne peut pas être vide.')
+      if (contenu !== note.contenu) {
+        data.contenu = contenu
+        journal.push('a modifié une note de suivi')
+      }
+    }
+
+    if (donnees.has('publiee')) {
+      const publiee = texte(donnees, 'publiee') === '1'
+      if (publiee !== note.publiee) {
+        data.publiee = publiee
+        journal.push(publiee ? 'a publié une note de suivi' : 'a repassé une note en brouillon')
+      }
+    }
+
+    if (Object.keys(data).length === 0) return SUCCES
+
+    await prisma.note.update({ where: { id: note.id }, data })
+    for (const message of journal) {
+      await journaliser(utilisateur, 'COMMENTAIRE', message, projet.id)
+    }
+
+    revalider(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+export async function supprimerNote(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const noteId = texte(donnees, 'noteId')
+    const note = await prisma.note.findUnique({ where: { id: noteId } })
+    if (!note) throw new Error('Note introuvable.')
+
+    const { utilisateur, projet } = await projetAccessible(note.projectId)
+
+    await prisma.note.delete({ where: { id: note.id } })
+    await journaliser(utilisateur, 'COMMENTAIRE', 'a supprimé une note de suivi', projet.id)
+
+    revalider(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+/* ---------------------------------------------------------------- replays */
+
+export async function creerReplay(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const projectId = texte(donnees, 'projectId')
+    const { utilisateur, projet } = await projetAccessible(projectId)
+
+    const titre = texte(donnees, 'titre')
+    if (!titre) throw new Error('Le titre du replay est obligatoire.')
+
+    const url = urlValide(texte(donnees, 'url'))
+
+    const dateBrute = texte(donnees, 'date')
+    const date = dateBrute ? new Date(dateBrute) : null
+    if (date && Number.isNaN(date.getTime())) throw new Error('Date invalide.')
+
+    await prisma.replay.create({ data: { projectId: projet.id, titre, url, date } })
+    await journaliser(utilisateur, 'LIVRABLE', `a ajouté le replay « ${titre} »`, projet.id)
+
+    revalider(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+export async function modifierReplay(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const replayId = texte(donnees, 'replayId')
+    const replay = await prisma.replay.findUnique({ where: { id: replayId } })
+    if (!replay) throw new Error('Replay introuvable.')
+
+    const { utilisateur, projet } = await projetAccessible(replay.projectId)
+
+    const data: { titre?: string; url?: string; date?: Date | null } = {}
+
+    if (donnees.has('titre')) {
+      const titre = texte(donnees, 'titre')
+      if (!titre) throw new Error('Le titre du replay ne peut pas être vide.')
+      if (titre !== replay.titre) data.titre = titre
+    }
+
+    if (donnees.has('url')) {
+      const url = urlValide(texte(donnees, 'url'))
+      if (url !== replay.url) data.url = url
+    }
+
+    if (donnees.has('date')) {
+      const brute = texte(donnees, 'date')
+      const date = brute ? new Date(brute) : null
+      if (date && Number.isNaN(date.getTime())) throw new Error('Date invalide.')
+      if ((replay.date?.getTime() ?? null) !== (date?.getTime() ?? null)) data.date = date
+    }
+
+    if (Object.keys(data).length === 0) return SUCCES
+
+    await prisma.replay.update({ where: { id: replay.id }, data })
+    await journaliser(
+      utilisateur,
+      'LIVRABLE',
+      `a mis à jour le replay « ${data.titre ?? replay.titre} »`,
+      projet.id,
+    )
+
+    revalider(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+export async function supprimerReplay(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const replayId = texte(donnees, 'replayId')
+    const replay = await prisma.replay.findUnique({ where: { id: replayId } })
+    if (!replay) throw new Error('Replay introuvable.')
+
+    const { utilisateur, projet } = await projetAccessible(replay.projectId)
+
+    await prisma.replay.delete({ where: { id: replay.id } })
+    await journaliser(
+      utilisateur,
+      'LIVRABLE',
+      `a supprimé le replay « ${replay.titre} »`,
       projet.id,
     )
 

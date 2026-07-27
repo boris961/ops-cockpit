@@ -75,7 +75,7 @@ export function EquipeProjet({
 
 function Pastille({ nom }: { nom: string }) {
   return (
-    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sand text-[11px] font-medium ring-1 ring-border">
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sand text-[11px] font-medium ring-1 ring-white/12">
       {initiales(nom)}
     </span>
   )

@@ -30,18 +30,20 @@ export function CarteKpi({
   const carte = (
     <Card
       className={cn(
-        'h-full gap-0 px-4 py-4 ring-border',
-        href && 'transition-shadow hover:ring-foreground/30',
+        'verre h-full gap-0 rounded-xl px-4 py-4 ring-1 ring-white/10 transition-all',
+        href && 'hover:ring-brand/40 hover:shadow-halo',
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[10px] leading-tight tracking-[0.1em] text-muted-foreground uppercase">
+        <p className="text-[10px] leading-tight tracking-[0.14em] text-muted-foreground uppercase">
           {libelle}
         </p>
         <Icone
           className={cn(
             'size-4 shrink-0',
-            alerte && valeur > 0 ? 'text-brand' : 'text-muted-foreground',
+            alerte && valeur > 0
+              ? 'text-bad drop-shadow-[0_0_6px_var(--bad)]'
+              : 'text-brand-clair/70',
           )}
           strokeWidth={1.75}
         />
@@ -49,12 +51,14 @@ export function CarteKpi({
 
       <p
         className={cn(
-          'mt-3 font-heading text-[2.125rem] leading-none',
-          alerte && valeur > 0 && 'text-brand',
+          'mt-3.5 text-[2.5rem] leading-none font-light tracking-tight tabular-nums',
+          alerte && valeur > 0
+            ? 'text-bad drop-shadow-[0_0_16px_color-mix(in_oklab,var(--bad)_55%,transparent)]'
+            : 'text-foreground',
         )}
       >
         {valeur}
-        {unite ? <span className="text-xl">{unite}</span> : null}
+        {unite ? <span className="text-2xl text-muted-foreground">{unite}</span> : null}
       </p>
 
       {progression !== undefined ? (

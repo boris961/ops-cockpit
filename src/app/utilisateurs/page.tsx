@@ -24,7 +24,7 @@ export default async function Utilisateurs() {
   return (
     <div className="px-6 py-8 lg:px-10">
       <header className="mb-8">
-        <h1 className="font-heading text-4xl leading-tight">Utilisateurs</h1>
+        <h1 className="text-4xl font-light leading-tight tracking-tight">Utilisateurs</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Comptes, rôles et accès. Un COO ou un Head voit tous les projets ; les autres profils ne
           voient que ceux qu&apos;ils portent ou dont ils sont membres.

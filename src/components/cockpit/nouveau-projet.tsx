@@ -32,7 +32,7 @@ export function NouveauProjet({
       <button
         type="button"
         onClick={() => setOuvert(true)}
-        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-fonce px-3.5 text-sm font-semibold text-white transition-colors hover:bg-brand"
+        className="violet-plein inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-sm font-semibold transition-all"
       >
         <Plus className="size-4" strokeWidth={2} aria-hidden />
         Nouveau projet
@@ -41,10 +41,10 @@ export function NouveauProjet({
   }
 
   return (
-    <Card className="w-full ring-border sm:w-[34rem]">
+    <Card className="verre w-full rounded-xl ring-1 ring-white/10 sm:w-[34rem]">
       <form action={action} className="space-y-4 px-5 py-1">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="font-heading text-lg">Nouveau projet</h2>
+          <h2 className="text-lg font-semibold">Nouveau projet</h2>
           <button
             type="button"
             onClick={() => setOuvert(false)}

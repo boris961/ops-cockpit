@@ -5,8 +5,8 @@ import { ArrowLeft } from 'lucide-react'
 import { getProjet, getUtilisateurs } from '@/lib/queries'
 import { peutModifierProjet, utilisateurCourant } from '@/lib/autorisation'
 import { dateCourte, tempsRelatif } from '@/lib/cockpit'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ActionsProjet } from '@/components/cockpit/actions-projet'
+import { Carte } from '@/components/cockpit/carte'
 import { BlocagesProjet, type BlocageItem } from '@/components/cockpit/blocages-projet'
 import { EquipeProjet } from '@/components/cockpit/equipe-projet'
 import { FicheProjet } from '@/components/cockpit/fiche-projet'
@@ -15,6 +15,9 @@ import {
   PastilleSante,
   PuceStatut,
 } from '@/components/cockpit/indicateurs'
+import { NotesProjet, type NoteItem } from '@/components/cockpit/notes-projet'
+import { OngletsProjet } from '@/components/cockpit/onglets-projet'
+import { ReplaysProjet, type ReplayItem } from '@/components/cockpit/replays-projet'
 import { TachesProjet, type TacheItem } from '@/components/cockpit/taches-projet'
 
 export default async function DetailProjet(props: PageProps<'/projets/[id]'>) {
@@ -45,7 +48,15 @@ export default async function DetailProjet(props: PageProps<'/projets/[id]'>) {
     echeance: tache.echeance ? tache.echeance.toISOString().slice(0, 10) : null,
     echeanceLisible: tache.echeance ? dateCourte(tache.echeance) : null,
     enRetard: Boolean(tache.echeance && tache.echeance < maintenant && tache.status !== 'TERMINE'),
+    responsableId: tache.ownerId,
+    responsableNom: tache.owner?.name ?? null,
   }))
+
+  // Une tache ne peut etre confiee qu'au directeur ou a un membre de l'equipe.
+  const assignables = [
+    { id: projet.owner.id, name: projet.owner.name },
+    ...projet.membres.map((membre) => ({ id: membre.id, name: membre.name })),
+  ]
 
   const blocages: BlocageItem[] = projet.blocages.map((blocage) => ({
     id: blocage.id,
@@ -56,6 +67,26 @@ export default async function DetailProjet(props: PageProps<'/projets/[id]'>) {
     auteur: blocage.reporter.name,
     cree: tempsRelatif(blocage.createdAt, maintenant),
     resolu: blocage.resolvedAt ? tempsRelatif(blocage.resolvedAt, maintenant) : null,
+  }))
+
+  const notes: NoteItem[] = projet.notes.map((note) => ({
+    id: note.id,
+    contenu: note.contenu,
+    publiee: note.publiee,
+    auteur: note.auteur.name,
+    date: tempsRelatif(note.createdAt, maintenant),
+    modifiee:
+      note.updatedAt.getTime() - note.createdAt.getTime() > 1000
+        ? tempsRelatif(note.updatedAt, maintenant)
+        : null,
+  }))
+
+  const replays: ReplayItem[] = projet.replays.map((replay) => ({
+    id: replay.id,
+    titre: replay.titre,
+    url: replay.url,
+    date: replay.date ? replay.date.toISOString().slice(0, 10) : null,
+    dateLisible: replay.date ? dateCourte(replay.date) : null,
   }))
 
   return (
@@ -70,7 +101,7 @@ export default async function DetailProjet(props: PageProps<'/projets/[id]'>) {
 
       <header className="mt-4 mb-8 flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="font-heading text-4xl leading-tight">{projet.nom}</h1>
+          <h1 className="text-4xl font-light leading-tight tracking-tight">{projet.nom}</h1>
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
             <PuceStatut statut={projet.status} />
             <PastilleSante sante={projet.sante} />
@@ -104,106 +135,110 @@ export default async function DetailProjet(props: PageProps<'/projets/[id]'>) {
         ) : null}
       </header>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0 space-y-6">
-          <Card className="ring-border">
-            <CardHeader>
-              <CardTitle>Tâches</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <TachesProjet projectId={projet.id} taches={taches} modifiable={modifiable} />
-            </CardContent>
-          </Card>
+      <OngletsProjet
+        suivi={
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="min-w-0">
+              <Carte titre="Notes">
+                <NotesProjet projectId={projet.id} notes={notes} />
+              </Carte>
+            </div>
 
-          <Card className="ring-border">
-            <CardHeader>
-              <CardTitle>Blocages</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <BlocagesProjet
-                projectId={projet.id}
-                blocages={blocages}
-                modifiable={modifiable}
-              />
-            </CardContent>
-          </Card>
+            <aside className="min-w-0">
+              <Carte titre="Replays des calls" rail>
+                <ReplaysProjet projectId={projet.id} replays={replays} />
+              </Carte>
+            </aside>
+          </div>
+        }
+        detail={
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="min-w-0 space-y-6">
+              <Carte titre="Tâches">
+                <TachesProjet
+                  projectId={projet.id}
+                  taches={taches}
+                  assignables={assignables}
+                  modifiable={modifiable}
+                />
+              </Carte>
 
-          <Card className="ring-border">
-            <CardHeader>
-              <CardTitle>Fil d&apos;activité</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {projet.activites.map((activite) => (
-                <div key={activite.id} className="flex gap-3">
-                  <span aria-hidden className="mt-1.5 size-1.5 shrink-0 rounded-full bg-border" />
-                  <div className="min-w-0">
-                    <p className="text-sm leading-snug">
-                      <span className="font-medium">{activite.actor.name}</span>{' '}
-                      <span className="text-muted-foreground">{activite.message}</span>
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {tempsRelatif(activite.createdAt, maintenant)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {projet.activites.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Aucune activité enregistrée.</p>
-              ) : null}
-            </CardContent>
-          </Card>
-        </div>
+              <Carte titre="Blocages">
+                <BlocagesProjet
+                  projectId={projet.id}
+                  blocages={blocages}
+                  modifiable={modifiable}
+                />
+              </Carte>
 
-        <aside className="min-w-0 space-y-6">
-          <Card className="ring-border">
-            <CardHeader>
-              <CardTitle>Fiche projet</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FicheProjet
-                projectId={projet.id}
-                modifiable={modifiable}
-                valeurs={{
-                  description: projet.description ?? '',
-                  ownerId: projet.ownerId,
-                  status: projet.status,
-                  sante: projet.sante,
-                  prochainJalon: projet.prochainJalon ?? '',
-                  departements: projet.departements,
-                }}
-                utilisateurs={tousLesUtilisateurs}
-              />
-            </CardContent>
-          </Card>
+              <Carte titre="Fil d'activité" contenuClassName="space-y-4">
+                <>
+                  {projet.activites.map((activite) => (
+                    <div key={activite.id} className="flex gap-3">
+                      <span
+                        aria-hidden
+                        className="mt-1.5 size-1.5 shrink-0 rounded-full bg-border"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm leading-snug">
+                          <span className="font-medium">{activite.actor.name}</span>{' '}
+                          <span className="text-muted-foreground">{activite.message}</span>
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {tempsRelatif(activite.createdAt, maintenant)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {projet.activites.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucune activité enregistrée.</p>
+                  ) : null}
+                </>
+              </Carte>
+            </div>
 
-          <Card className="ring-border">
-            <CardHeader>
-              <CardTitle>Équipe</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <EquipeProjet
-                projectId={projet.id}
-                modifiable={modifiable}
-                directeur={{
-                  id: projet.owner.id,
-                  name: projet.owner.name,
-                  role: projet.owner.role,
-                }}
-                membres={projet.membres.map((membre) => ({
-                  id: membre.id,
-                  name: membre.name,
-                  role: membre.role,
-                }))}
-                candidats={tousLesUtilisateurs.filter(
-                  (utilisateur) =>
-                    utilisateur.id !== projet.ownerId &&
-                    !projet.membres.some((membre) => membre.id === utilisateur.id),
-                )}
-              />
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
+            <aside className="min-w-0 space-y-6">
+              <Carte titre="Fiche projet" rail>
+                <FicheProjet
+                  projectId={projet.id}
+                  modifiable={modifiable}
+                  valeurs={{
+                    description: projet.description ?? '',
+                    ownerId: projet.ownerId,
+                    status: projet.status,
+                    sante: projet.sante,
+                    prochainJalon: projet.prochainJalon ?? '',
+                    departements: projet.departements,
+                  }}
+                  utilisateurs={tousLesUtilisateurs}
+                />
+              </Carte>
+
+              <Carte titre="Équipe" rail>
+                <EquipeProjet
+                  projectId={projet.id}
+                  modifiable={modifiable}
+                  directeur={{
+                    id: projet.owner.id,
+                    name: projet.owner.name,
+                    role: projet.owner.role,
+                  }}
+                  membres={projet.membres.map((membre) => ({
+                    id: membre.id,
+                    name: membre.name,
+                    role: membre.role,
+                  }))}
+                  candidats={tousLesUtilisateurs.filter(
+                    (utilisateur) =>
+                      utilisateur.id !== projet.ownerId &&
+                      !projet.membres.some((membre) => membre.id === utilisateur.id),
+                  )}
+                />
+              </Carte>
+            </aside>
+          </div>
+        }
+      />
     </div>
   )
 }

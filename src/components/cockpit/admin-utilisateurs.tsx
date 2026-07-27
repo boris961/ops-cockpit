@@ -19,6 +19,7 @@ import {
   BoutonSoumettre,
   MessageEtat,
   classeChamp,
+  classeChampCompact,
   classeLibelle,
 } from '@/components/cockpit/formulaire'
 
@@ -34,7 +35,7 @@ export type UtilisateurItem = {
 export function AdminUtilisateurs({ utilisateurs }: { utilisateurs: UtilisateurItem[] }) {
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <Card className="min-w-0 ring-border">
+      <Card className="verre min-w-0 rounded-xl ring-1 ring-white/10">
         <CardHeader>
           <CardTitle>Comptes ({utilisateurs.length})</CardTitle>
         </CardHeader>
@@ -59,7 +60,7 @@ export function AdminUtilisateurs({ utilisateurs }: { utilisateurs: UtilisateurI
                 <TableRow key={utilisateur.id} className="border-border">
                   <TableCell className="py-3 pl-5">
                     <span className="flex items-center gap-3">
-                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sand text-[11px] font-medium ring-1 ring-border">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sand text-[11px] font-medium ring-1 ring-white/12">
                         {initiales(utilisateur.name)}
                       </span>
                       <span className="font-medium">{utilisateur.name}</span>
@@ -103,7 +104,7 @@ function SelectRole({ utilisateur }: { utilisateur: UtilisateurItem }) {
         defaultValue={utilisateur.role}
         disabled={enCours}
         onChange={(evenement) => evenement.currentTarget.form?.requestSubmit()}
-        className="h-7 rounded-lg border border-border bg-background px-2 text-xs outline-none transition-colors focus:border-brand focus:ring-3 focus:ring-brand/15 disabled:opacity-60"
+        className={classeChampCompact}
       >
         {ROLES.map((role) => (
           <option key={role} value={role}>
@@ -125,7 +126,7 @@ function FormulaireNouvelUtilisateur() {
   }, [etat])
 
   return (
-    <Card className="ring-border xl:sticky xl:top-8">
+    <Card className="verre rounded-xl ring-1 ring-white/10 xl:sticky xl:top-8">
       <CardHeader>
         <CardTitle>Nouveau compte</CardTitle>
       </CardHeader>

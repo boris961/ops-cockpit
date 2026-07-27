@@ -79,6 +79,7 @@ model User {
   blocagesEmis  Issue[]    @relation("reporter")
   blocagesGeres Issue[]    @relation("issueOwner")
   activites     Activity[]
+  notes         Note[]
 }
 
 model Project {
@@ -101,8 +102,34 @@ model Project {
   blocages  Issue[]
   activites Activity[]
   membres   User[]     @relation("MembresProjet")
+  notes     Note[]
+  replays   Replay[]
   @@index([status])
   @@index([ownerId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  auteurId  String
+  auteur    User     @relation(fields: [auteurId], references: [id])
+  contenu   String
+  publiee   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([projectId])
+}
+
+model Replay {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  titre     String
+  url       String
+  date      DateTime?
+  createdAt DateTime  @default(now())
+  @@index([projectId])
 }
 
 model Task {
