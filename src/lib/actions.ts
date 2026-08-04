@@ -454,7 +454,7 @@ export async function creerTache(
       projet.id,
     )
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -561,7 +561,7 @@ export async function modifierTache(
       await journaliser(utilisateur, ligne.type, ligne.message, projet.id)
     }
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -582,7 +582,7 @@ export async function supprimerTache(
     await prisma.task.delete({ where: { id: tache.id } })
     await journaliser(utilisateur, 'COMMENTAIRE', `a supprimé la tâche « ${tache.titre} »`, projet.id)
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -613,7 +613,7 @@ export async function ajouterMembre(
     })
     await journaliser(utilisateur, 'COMMENTAIRE', `a ajouté ${membre.name} à l'équipe`, projet.id)
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -643,7 +643,7 @@ export async function retirerMembre(
       projet.id,
     )
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -676,7 +676,7 @@ export async function creerNote(
       projet.id,
     )
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -722,7 +722,7 @@ export async function modifierNote(
       await journaliser(utilisateur, 'COMMENTAIRE', message, projet.id)
     }
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -743,7 +743,7 @@ export async function supprimerNote(
     await prisma.note.delete({ where: { id: note.id } })
     await journaliser(utilisateur, 'COMMENTAIRE', 'a supprimé une note de suivi', projet.id)
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -772,7 +772,7 @@ export async function creerReplay(
     await prisma.replay.create({ data: { projectId: projet.id, titre, url, date } })
     await journaliser(utilisateur, 'LIVRABLE', `a ajouté le replay « ${titre} »`, projet.id)
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -820,7 +820,7 @@ export async function modifierReplay(
       projet.id,
     )
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -846,7 +846,7 @@ export async function supprimerReplay(
       projet.id,
     )
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -891,7 +891,7 @@ export async function enregistrerUtilisateur(
     )
 
     revalidatePath('/utilisateurs')
-    revalider()
+    revaliderListeProjets()
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -922,7 +922,7 @@ export async function modifierRoleUtilisateur(
     )
 
     revalidatePath('/utilisateurs')
-    revalider()
+    revaliderListeProjets()
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -966,7 +966,7 @@ export async function creerBlocage(
       projet.id,
     )
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -998,7 +998,7 @@ export async function resoudreBlocage(
       projet.id,
     )
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
