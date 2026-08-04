@@ -1,0 +1,81 @@
+{
+  "name": "🚨 Jarvis — Alerte blocage P0",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🚨 Alerte immédiate sur blocage P0\n\nToutes les 15 min : si un blocage **P0** a été créé dans le cockpit, message Telegram immédiat (un message par blocage).\n\n### Setup (3 min)\n1. Credential **Postgres Neon** : le même que le serveur MCP cockpit.\n2. Remplace `REMPLACE_TON_CHAT_ID` dans le nœud Telegram.\n3. Active le workflow.\n\nNotes : fenêtre de 16 min avec chevauchement volontaire — un doublon d'alerte est rarissime mais possible, mieux qu'un P0 raté. Pour alerter aussi sur les P1, remplace `priorite = 'P0'` par `priorite IN ('P0','P1')` dans la requête.",
+        "height": 380,
+        "width": 380
+      },
+      "id": "sticky-p0-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-820, 100]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "n-p0-schedule",
+      "name": "Toutes les 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-400, 280]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT i.titre,\n       i.priorite::text AS priorite,\n       COALESCE(p.nom, '(sans projet)') AS projet,\n       u.name AS reporter,\n       to_char(i.\"createdAt\" AT TIME ZONE 'Europe/Paris', 'HH24:MI') AS heure\nFROM \"Issue\" i\nLEFT JOIN \"Project\" p ON p.id = i.\"projectId\"\nJOIN \"User\" u ON u.id = i.\"reporterId\"\nWHERE i.priorite = 'P0'\n  AND i.status <> 'CLOTURE'\n  AND i.\"createdAt\" > now() - interval '16 minutes'\nORDER BY i.\"createdAt\" ASC",
+        "options": {}
+      },
+      "id": "n-p0-pg",
+      "name": "Blocages P0 récents",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-180, 280]
+    },
+    {
+      "parameters": {
+        "chatId": "REMPLACE_TON_CHAT_ID",
+        "text": "=🔥 Monsieur, blocage P0 signalé à {{ $json.heure }} par {{ $json.reporter }} sur « {{ $json.projet }} » : {{ $json.titre }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-p0-telegram",
+      "name": "Alerter Boris",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [40, 280]
+    }
+  ],
+  "connections": {
+    "Toutes les 15 min": {
+      "main": [
+        [
+          { "node": "Blocages P0 récents", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Blocages P0 récents": {
+      "main": [
+        [
+          { "node": "Alerter Boris", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris"
+  },
+  "pinData": {}
+}

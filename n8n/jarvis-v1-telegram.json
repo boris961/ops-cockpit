@@ -1,0 +1,438 @@
+{
+  "name": "🎩 Jarvis v1 — Assistant vocal (Telegram)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🎩 Jarvis v1 — boucle vocale complète\n\n**Note vocale → Whisper → Agent Claude (outils + mémoire) → ElevenLabs → réponse vocale.**\nFonctionne aussi en texte.\n\n### Credentials à créer (nœud par nœud)\n1. **Telegram** : token du bot (via @BotFather)\n2. **Anthropic** : clé API (cerveau)\n3. **OpenAI** : clé API (transcription Whisper)\n4. **ElevenLabs** : credential *Header Auth* → Name: `xi-api-key`, Value: ta clé\n5. **Google Calendar** : OAuth2 (outil agenda)\n6. **Notion** : intégration MTS (outil recherche)\n7. **GitHub** : token (outil capture Atlas — optionnel au début)\n\n💰 ~0,01-0,03 € par échange.",
+        "height": 560,
+        "width": 380
+      },
+      "id": "sticky-01",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-900, 60]
+    },
+    {
+      "parameters": {
+        "content": "## ⚙️ 4 réglages à personnaliser\n\n1. **agenda** → choisis ton calendrier (ex. `boris@entrepreneurs.com`)\n2. **Voix (ElevenLabs)** → remplace l'ID de voix dans l'URL par ta voix préférée (une voix multilingue rend très bien en français)\n3. **capture_atlas** → owner + repo GitHub de ton vault Atlas-Brain (synchronisé par Obsidian Git)\n4. **Sécurité** → dans *Telegram Trigger*, restreins aux chat/user IDs autorisés (ton ID) si l'option est dispo dans ta version ; sinon garde le token du bot secret.\n\nLa **personnalité** vit dans le System Message du nœud « Jarvis (Agent IA) » — ajuste-la librement.",
+        "height": 440,
+        "width": 380,
+        "color": 3
+      },
+      "id": "sticky-02",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [700, 620]
+    },
+    {
+      "parameters": {
+        "content": "## 🚀 Et après ?\n\n- Ajouter un outil **Gmail** (lecture + brouillons)\n- Exposer tes workflows n8n via **MCP Server Trigger** → Jarvis les déclenche à la voix\n- Brancher un **Schedule Trigger** à 7h30 qui pousse le brief du matin sans être sollicité\n- Passer au temps réel (v2/v3) : voir le blueprint",
+        "height": 300,
+        "width": 340,
+        "color": 4
+      },
+      "id": "sticky-03",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1360, 40]
+    },
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "n-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [-460, 300],
+      "webhookId": "9f2c7e1a-4b6d-4a8e-9c3f-jarvisv1boris"
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $json.message.chat.id }}",
+        "action": "record_voice"
+      },
+      "id": "n-action",
+      "name": "Accusé (enregistre…)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-240, 480]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "voice-exists",
+              "leftValue": "={{ $json.message.voice }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n-if",
+      "name": "Note vocale ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-240, 300]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}",
+        "download": true
+      },
+      "id": "n-getfile",
+      "name": "Récupérer la note vocale",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-20, 200]
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "operation": "transcribe",
+        "binaryPropertyName": "data",
+        "options": {
+          "language": "fr"
+        }
+      },
+      "id": "n-stt",
+      "name": "Transcrire (Whisper)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [200, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "as-voice",
+              "name": "chatInput",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-set-voice",
+      "name": "Entrée (voix)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [420, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "as-text",
+              "name": "chatInput",
+              "value": "={{ $json.message.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-set-text",
+      "name": "Entrée (texte)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-20, 420]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=Tu es JARVIS, l'assistant personnel de Boris — Co-COO d'Entrepreneurs.com, fondateur de Made To Scale, basé en France. Nous sommes le {{ $now.setZone('Europe/Paris').setLocale('fr').toFormat('cccc d LLLL yyyy, HH:mm') }} (heure de Paris).\n\nPERSONNALITÉ : flegme courtois à l'anglaise, humour pince-sans-rire discret, loyauté totale. Tu peux l'appeler « Monsieur » avec un clin d'œil, sans jamais être obséquieux ni bavard.\n\nRÈGLES DE RÉPONSE — ta réponse est lue À VOIX HAUTE :\n- Français uniquement, 1 à 5 phrases orales et naturelles.\n- Pas de listes, pas de markdown, pas d'emojis, pas d'URLs.\n- L'essentiel d'abord ; le détail seulement si on te le demande.\n- Si la demande est ambiguë, pose UNE question de clarification.\n\nSES CASQUETTES (pour router le contexte) :\n- Entrepreneurs.com : casquette principale (Co-COO). Interlocuteurs clés : Alec (CEO), Fabrice (COO), Anisse (CPO).\n- Made To Scale (MTS) : agence d'agents IA en supervision — l'exécution est chez Venugopal et Aman (fuseau de Kolkata).\n- Sides (max 1,5 jour/semaine) : Riven, Aikho, Clover, Oscar, conférences. Mithril en pause.\n\nTES OUTILS :\n- agenda : lire ses événements de calendrier. Donne toujours les horaires en heure de Paris.\n- recherche_notion_mts : chercher dans le Notion de Made To Scale (CRM prospects, clients, process).\n- capture_atlas : sauvegarder dans son second cerveau (Atlas Brain) toute note, idée ou décision dictée. Utilise-le dès qu'il dit « note », « capture » ou « ajoute à l'Atlas ».\n\nPOUR capture_atlas :\n- chemin : 00_Inbox/AAAA-MM-JJ - Titre court.md (date du jour)\n- contenu : d'abord un front-matter YAML entre deux lignes '---' avec type: note, date: AAAA-MM-JJ, source: jarvis, tags: [] — puis la note reformulée proprement en Markdown.\n- Confirme ensuite oralement, en une phrase, ce que tu as capturé.\n\nSÉCURITÉ : tu ne crées des fichiers que dans 00_Inbox, jamais ailleurs. Pour toute action irréversible, décris-la et attends une confirmation explicite."
+        }
+      },
+      "id": "n-agent",
+      "name": "Jarvis (Agent IA)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.1,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "id": "n-llm",
+      "name": "Claude (Anthropic)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [540, 560]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "contextWindowLength": 15
+      },
+      "id": "n-memory",
+      "name": "Mémoire (15 tours)",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [700, 560]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "boris@entrepreneurs.com"
+        },
+        "returnAll": false,
+        "limit": 20,
+        "options": {
+          "timeMin": "={{ $fromAI('apres', 'Debut de la periode a consulter, format ISO 8601, ex 2026-07-23T00:00:00+02:00', 'string') }}",
+          "timeMax": "={{ $fromAI('avant', 'Fin de la periode a consulter, format ISO 8601', 'string') }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Lire les événements du calendrier Google de Boris entre deux dates (apres/avant, ISO 8601). À utiliser pour toute question d'agenda, de disponibilité ou de planning."
+      },
+      "id": "n-tool-cal",
+      "name": "agenda",
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [860, 560]
+    },
+    {
+      "parameters": {
+        "resource": "page",
+        "operation": "search",
+        "text": "={{ $fromAI('requete', 'Mots-cles de recherche dans le Notion Made To Scale', 'string') }}",
+        "returnAll": false,
+        "limit": 5,
+        "options": {},
+        "descriptionType": "manual",
+        "toolDescription": "Chercher dans le workspace Notion de Made To Scale : CRM prospects, base clients, process, projets. Fournis des mots-clés simples."
+      },
+      "id": "n-tool-notion",
+      "name": "recherche_notion_mts",
+      "type": "n8n-nodes-base.notionTool",
+      "typeVersion": 2.2,
+      "position": [1020, 560]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "create",
+        "owner": {
+          "__rl": true,
+          "mode": "name",
+          "value": "TON-COMPTE-GITHUB"
+        },
+        "repository": {
+          "__rl": true,
+          "mode": "name",
+          "value": "atlas-brain"
+        },
+        "filePath": "={{ $fromAI('chemin', 'Chemin du fichier a creer, ex 00_Inbox/2026-07-23 - Idee dashboard.md', 'string') }}",
+        "fileContent": "={{ $fromAI('contenu', 'Contenu Markdown complet du fichier, front-matter YAML inclus', 'string') }}",
+        "commitMessage": "jarvis: capture vocale (Telegram)"
+      },
+      "id": "n-tool-github",
+      "name": "capture_atlas",
+      "type": "n8n-nodes-base.githubTool",
+      "typeVersion": 1.1,
+      "position": [1180, 560]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb?output_format=mp3_44100_128",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.output, model_id: 'eleven_flash_v2_5' }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "n-tts",
+      "name": "Voix (ElevenLabs)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 300]
+    },
+    {
+      "parameters": {
+        "operation": "sendAudio",
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-send-voice",
+      "name": "Envoyer la réponse vocale",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $('Jarvis (Agent IA)').item.json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-send-text",
+      "name": "Envoyer le texte",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1420, 300]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          { "node": "Note vocale ?", "type": "main", "index": 0 },
+          { "node": "Accusé (enregistre…)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Note vocale ?": {
+      "main": [
+        [
+          { "node": "Récupérer la note vocale", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Entrée (texte)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Récupérer la note vocale": {
+      "main": [
+        [
+          { "node": "Transcrire (Whisper)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Transcrire (Whisper)": {
+      "main": [
+        [
+          { "node": "Entrée (voix)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Entrée (voix)": {
+      "main": [
+        [
+          { "node": "Jarvis (Agent IA)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Entrée (texte)": {
+      "main": [
+        [
+          { "node": "Jarvis (Agent IA)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Jarvis (Agent IA)": {
+      "main": [
+        [
+          { "node": "Voix (ElevenLabs)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Voix (ElevenLabs)": {
+      "main": [
+        [
+          { "node": "Envoyer la réponse vocale", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Envoyer la réponse vocale": {
+      "main": [
+        [
+          { "node": "Envoyer le texte", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claude (Anthropic)": {
+      "ai_languageModel": [
+        [
+          { "node": "Jarvis (Agent IA)", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    },
+    "Mémoire (15 tours)": {
+      "ai_memory": [
+        [
+          { "node": "Jarvis (Agent IA)", "type": "ai_memory", "index": 0 }
+        ]
+      ]
+    },
+    "agenda": {
+      "ai_tool": [
+        [
+          { "node": "Jarvis (Agent IA)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "recherche_notion_mts": {
+      "ai_tool": [
+        [
+          { "node": "Jarvis (Agent IA)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "capture_atlas": {
+      "ai_tool": [
+        [
+          { "node": "Jarvis (Agent IA)", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
