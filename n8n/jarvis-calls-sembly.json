@@ -1,0 +1,98 @@
+{
+  "name": "📞 Jarvis — Calls (Sembly → Atlas)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 📞 Sembly → Atlas Brain\n\nSembly pousse chaque call terminé ici (webhook) → stockage dans Neon (`jarvis_calls`) → le script `calls-sync.ts` sur le Mac range tout dans `15_Resources/Calls/` du vault (toutes les 30 min).\n\n### Setup\n1. **Credential Postgres** sur le nœud « Stocker le call » : le même que le cockpit (Neon).\n2. **Active** le workflow → copie la **Production URL** du nœud Webhook.\n3. **Dans Sembly** (app web) : *My Automations* → onglet **Custom** → **Add** :\n   - Automation 1 : type **Transcription** → Destination = l'URL copiée\n   - Automation 2 : type **Meeting Notes** → même URL\n   - (Optionnel) Automation 3 : type **Tasks** → même URL\n   - Filtres : toutes tes réunions.\n4. **Test** : ouvre un call passé dans Sembly → bouton **Zap** → déclenche l'automation → vérifie l'exécution ici, puis `npx tsx scripts/calls-sync.ts` sur le Mac.\n\n⚠️ L'URL contient un segment secret (`-7k2m9x…`) : ne la partage pas. Le nœud Telegram de confirmation est désactivé — active-le si tu veux un ping à chaque call ingéré.",
+        "height": 620,
+        "width": 420
+      },
+      "id": "sticky-calls-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-900, -20]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sembly-atlas-7k2m9xq4vt",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "n-calls-webhook",
+      "name": "Webhook Sembly",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-420, 300],
+      "webhookId": "c4a91e2b-77d5-4b1c-9e0a-semblyatlas1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalisation défensive du payload Sembly (schéma non documenté publiquement :\n// on extrait au mieux et on conserve TOUT le brut pour ajuster le mapping ensuite).\nconst b = $json.body ?? $json\n\nconst premier = (...vals) => vals.find((v) => v !== undefined && v !== null && v !== '')\n\nconst titre = premier(\n  b.meeting_title, b.meetingTitle, b.title, b.meeting?.title, b.meeting?.name, b.name,\n) ?? 'Call sans titre'\n\nconst dateIso = (() => {\n  const d = premier(b.meeting_date, b.meetingDate, b.date, b.started_at, b.start_time, b.meeting?.date, b.meeting?.started_at)\n  const parsed = d ? new Date(d) : new Date()\n  return isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString()\n})()\n\nconst partBruts = premier(b.participants, b.attendees, b.meeting?.participants, b.meeting?.attendees) ?? []\nconst participants = (Array.isArray(partBruts) ? partBruts : [])\n  .map((p) => (typeof p === 'string' ? p : premier(p?.name, p?.full_name, p?.fullName, p?.email)))\n  .filter(Boolean)\n\nconst enTexte = (v) => (v == null ? null : typeof v === 'string' ? v : JSON.stringify(v, null, 2))\n\nconst transcript = enTexte(premier(b.transcription, b.transcript, b.transcript_text))\nconst notes = enTexte(premier(b.notes, b.meeting_notes, b.meetingNotes, b.minutes, b.summary))\n\n// Tâche individuelle (Sembly pousse une requête par tâche)\nconst estTache = !transcript && !notes && premier(b.task_title, b.taskTitle, (b.title && (b.due_date || b.dueDate || b.description)) ? b.title : undefined)\nlet type = 'inconnu'\nlet contenu = null\nif (transcript) { type = 'transcription'; contenu = transcript }\nelse if (notes) { type = 'notes'; contenu = notes }\nelse if (estTache) {\n  type = 'task'\n  const due = premier(b.due_date, b.dueDate)\n  const desc = premier(b.description, b.task_description)\n  contenu = `- [ ] ${estTache}${due ? ` (échéance ${due})` : ''}${desc ? `\\n  ${desc}` : ''}`\n} else {\n  contenu = enTexte(b)\n}\n\nconst slug = String(titre).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase().slice(0, 60)\nconst cle = `${dateIso.slice(0, 10)}-${slug}`\n\nreturn [{ json: { cle, type, titre, date_iso: dateIso, participants, contenu, brut: JSON.stringify(b) } }]"
+      },
+      "id": "n-calls-code",
+      "name": "Normaliser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS jarvis_calls (\n  id serial PRIMARY KEY,\n  cle text NOT NULL,\n  type text NOT NULL,\n  titre text,\n  date_call timestamptz,\n  participants jsonb,\n  contenu text,\n  brut jsonb,\n  created_at timestamptz DEFAULT now(),\n  processed_at timestamptz\n);\nINSERT INTO jarvis_calls (cle, type, titre, date_call, participants, contenu, brut)\nVALUES ($1, $2, $3, $4::timestamptz, $5::jsonb, $6, $7::jsonb);",
+        "options": {
+          "queryReplacement": "={{ [ $json.cle, $json.type, $json.titre, $json.date_iso, JSON.stringify($json.participants), $json.contenu, $json.brut ] }}"
+        }
+      },
+      "id": "n-calls-pg",
+      "name": "Stocker le call",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [20, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "8606822360",
+        "text": "=📞 Call ingéré : « {{ $('Normaliser').item.json.titre }} » ({{ $('Normaliser').item.json.type }}). Rangement dans l'Atlas d'ici 30 minutes, Monsieur.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-calls-telegram",
+      "name": "Ping Telegram (optionnel)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [240, 300],
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Webhook Sembly": {
+      "main": [
+        [
+          { "node": "Normaliser", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Normaliser": {
+      "main": [
+        [
+          { "node": "Stocker le call", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Stocker le call": {
+      "main": [
+        [
+          { "node": "Ping Telegram (optionnel)", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris"
+  },
+  "pinData": {}
+}

@@ -66,7 +66,18 @@ Import → credential Postgres (valeurs de `DATABASE_URL`, l'URL *pooled*) → c
 - « Ajoute une tâche au sprint cybersec : relancer la campagne phishing, pour vendredi. »
 - Et après une sync : « Qu'est-ce qui a changé dans la Tour de contrôle ? » (répond depuis le vault)
 
-## 3. Dépannage
+## 3. Calls Sembly → Atlas (`scripts/calls-sync.ts` + `n8n/jarvis-calls-sembly.json`)
+
+Chaque call enregistré par **Sembly** est poussé (automation Custom → webhook n8n) dans la table Neon `jarvis_calls`, puis le script local les range dans **`15_Resources/Calls/AAAA-MM-JJ - Titre.md`** : front-matter (participants, date), notes Sembly, tâches détectées et transcript intégral — en sections balisées, fusionnées si Sembly envoie notes et transcription séparément.
+
+Mise en route : importer le workflow n8n (credential Postgres existant) → l'activer → copier la Production URL du webhook → dans Sembly, *My Automations → Custom → Add* : une automation **Transcription** + une **Meeting Notes** (+ **Tasks** en option), Destination = cette URL. Côté Mac :
+```bash
+npx tsx scripts/calls-sync.ts --dry-run   # premier test
+cp launchd/com.boris.jarvis-calls-sync.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.boris.jarvis-calls-sync.plist
+```
+La sync tourne toutes les 30 min (log : `~/Library/Logs/jarvis-calls-sync.log`). Test sans attendre un vrai call : dans Sembly, ouvrir une réunion passée → bouton **Zap** → déclencher l'automation manuellement. NB : le schéma exact du payload Sembly n'étant pas documenté publiquement, le nœud « Normaliser » extrait au mieux et conserve le brut en base (`jarvis_calls.brut`) — si une note sort mal formée, ajuster le mapping dans ce nœud.
+
+## 4. Dépannage
 - **`DIRECT_DB` manquant** : le script lit `.env` à la racine du repo — lance-le depuis `ops-cockpit/ops-cockpit`.
 - **Carte non appariée** : ajoute `cockpit_id: <id>` (listé par la sync et dans la Synthèse) au front-matter de la carte.
 - **Champ écrasé à tort** : `sante`/`statut`/`echeance` suivent désormais le cockpit pour les cartes appariées — c'est le contrat. Pour qu'une carte reste 100 % manuelle, retire son `cockpit_id` et renomme-la assez différemment du projet cockpit.
