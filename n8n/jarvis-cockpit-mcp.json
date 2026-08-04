@@ -1,0 +1,138 @@
+{
+  "name": "🎩 Jarvis — Cockpit (serveur MCP)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🎛️ Cockpit → outils MCP\n\nExpose **ops-cockpit** (Neon Postgres) comme outils appelables par :\n- **Jarvis v1 Telegram** → ajoute un nœud *MCP Client Tool* à l'agent, pointé sur l'URL de ce serveur\n- **Claude (app / Cowork)** → Paramètres → Connecteurs → ajouter l'URL\n- **Jarvis v2 (daemon Mac)** → config MCP du Claude Agent SDK\n\n### Setup\n1. Credential **Postgres** : reprends les valeurs de `DATABASE_URL` (l'URL *pooled* Neon, hôte `…-pooler…`, SSL requis) — les 4 nœuds outils l'utilisent.\n2. Credential **Bearer** sur le trigger : invente un token long, garde-le dans Keeper.\n3. Active le workflow → l'URL MCP est affichée sur le nœud trigger (`…/mcp/jarvis-cockpit`).\n\n⚠️ Ces outils **écrivent en base** (blocages, tâches, journal d'activité au nom de Boris). Réservé à ton usage.",
+        "height": 520,
+        "width": 400
+      },
+      "id": "sticky-mcp-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, -40]
+    },
+    {
+      "parameters": {
+        "content": "### Les 4 outils\n\n- **etat_cockpit** — projets actifs : santé, avancement (calculé comme dans l'app), tâches en retard, blocages, jalons\n- **creer_blocage** — signale un blocage (statut Bloqué, comme le bouton de l'app) + journalise l'activité\n- **resoudre_blocage** — clôture un blocage par son titre + journalise\n- **creer_tache** — ajoute une tâche au backlog d'un projet + journalise\n\nRésultat vide sur les écritures = projet/blocage introuvable (le dire à l'utilisateur).",
+        "height": 340,
+        "width": 380,
+        "color": 4
+      },
+      "id": "sticky-mcp-2",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [560, 320]
+    },
+    {
+      "parameters": {
+        "path": "jarvis-cockpit",
+        "authentication": "bearerAuth"
+      },
+      "id": "n-mcp-trigger",
+      "name": "Cockpit MCP Server",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 2,
+      "position": [-40, 60],
+      "webhookId": "7d3b2a90-51c8-4f6e-a1b7-jarviscockpit"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.nom, p.status::text AS statut, p.sante::text AS sante, u.name AS owner,\n  COALESCE(t.total,0) AS taches_total,\n  COALESCE(t.terminees,0) AS taches_terminees,\n  COALESCE(t.en_retard,0) AS taches_en_retard,\n  CASE WHEN COALESCE(t.total,0)=0 THEN p.avancement ELSE ROUND(100.0*t.terminees/t.total)::int END AS avancement_pct,\n  COALESCE(i.ouverts,0) AS blocages_ouverts,\n  COALESCE(i.p0,0) AS blocages_p0,\n  p.\"prochainJalon\" AS prochain_jalon,\n  to_char(p.\"dateCible\",'YYYY-MM-DD') AS date_cible\nFROM \"Project\" p\nJOIN \"User\" u ON u.id = p.\"ownerId\"\nLEFT JOIN LATERAL (\n  SELECT count(*)::int AS total,\n         (count(*) FILTER (WHERE status='TERMINE'))::int AS terminees,\n         (count(*) FILTER (WHERE echeance < now() AND status <> 'TERMINE'))::int AS en_retard\n  FROM \"Task\" WHERE \"projectId\" = p.id) t ON true\nLEFT JOIN LATERAL (\n  SELECT count(*)::int AS ouverts,\n         (count(*) FILTER (WHERE priorite='P0'))::int AS p0\n  FROM \"Issue\" WHERE \"projectId\" = p.id AND status <> 'CLOTURE') i ON true\nWHERE p.status <> 'ARCHIVE'\nORDER BY p.sante DESC, p.\"updatedAt\" DESC",
+        "options": {},
+        "descriptionType": "manual",
+        "toolDescription": "État live du cockpit ops : tous les projets actifs avec statut, santé (VERT/ORANGE/ROUGE), avancement %, tâches (total/terminées/en retard), blocages ouverts (dont P0), prochain jalon et date cible. À appeler pour toute question sur l'état des projets, du board ou des blocages."
+      },
+      "id": "n-tool-etat",
+      "name": "etat_cockpit",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [-360, 320]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH boris AS (SELECT id FROM \"User\" WHERE email = 'boris@entrepreneurs.com' LIMIT 1),\nproj AS (SELECT id, nom FROM \"Project\" WHERE status <> 'ARCHIVE' AND nom ILIKE '%' || $1 || '%' ORDER BY \"updatedAt\" DESC LIMIT 1),\nins AS (\n  INSERT INTO \"Issue\" (id, titre, description, \"projectId\", \"reporterId\", priorite, status, \"createdAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), $2, NULLIF($3,''), proj.id, boris.id,\n         COALESCE(NULLIF($4,''), 'P2')::\"Priority\", 'BLOQUE'::\"IssueStatus\", now()\n  FROM boris, proj\n  RETURNING id, titre, priorite, \"projectId\"\n),\nact AS (\n  INSERT INTO \"Activity\" (id, \"actorId\", \"projectId\", type, message, \"createdAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), (SELECT id FROM boris), ins.\"projectId\",\n         'BLOCAGE_CREE'::\"ActivityType\", 'a signalé le blocage « ' || ins.titre || ' » (via Jarvis)', now()\n  FROM ins\n  RETURNING id\n)\nSELECT ins.id AS blocage_id, ins.titre, ins.priorite::text AS priorite, (SELECT nom FROM proj) AS projet FROM ins",
+        "options": {
+          "queryReplacement": "={{ [ $fromAI('projet', 'Nom ou extrait du nom du projet concerne', 'string'), $fromAI('titre', 'Titre court et clair du blocage', 'string'), $fromAI('description', 'Description detaillee du blocage (chaine vide si aucune)', 'string'), $fromAI('priorite', 'P0, P1, P2 ou P3 — chaine vide pour le defaut P2', 'string') ] }}"
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Signaler un blocage (issue) sur un projet du cockpit, au nom de Boris. Il apparaît en statut « Bloqué » dans l'issue board, comme via l'app. Paramètres : projet (nom ou extrait), titre, description (optionnel), priorite (P0-P3, défaut P2). Résultat vide = projet introuvable."
+      },
+      "id": "n-tool-blocage",
+      "name": "creer_blocage",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [-120, 320]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH boris AS (SELECT id FROM \"User\" WHERE email = 'boris@entrepreneurs.com' LIMIT 1),\ncible AS (SELECT id, titre, \"projectId\" FROM \"Issue\" WHERE status <> 'CLOTURE' AND titre ILIKE '%' || $1 || '%' ORDER BY \"createdAt\" DESC LIMIT 1),\nupd AS (\n  UPDATE \"Issue\" i SET status = 'CLOTURE'::\"IssueStatus\", \"resolvedAt\" = now()\n  FROM cible WHERE i.id = cible.id\n  RETURNING i.id, i.titre, i.\"projectId\"\n),\nact AS (\n  INSERT INTO \"Activity\" (id, \"actorId\", \"projectId\", type, message, \"createdAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), boris.id, upd.\"projectId\",\n         'BLOCAGE_RESOLU'::\"ActivityType\", 'a résolu le blocage « ' || upd.titre || ' » (via Jarvis)', now()\n  FROM boris, upd\n  RETURNING id\n)\nSELECT upd.id AS blocage_id, upd.titre AS blocage_resolu FROM upd",
+        "options": {
+          "queryReplacement": "={{ [ $fromAI('titre', 'Titre (ou extrait du titre) du blocage a cloturer', 'string') ] }}"
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Clôturer (résoudre) un blocage ouvert de l'issue board, retrouvé par son titre ou un extrait. Journalise la résolution au nom de Boris. Résultat vide = aucun blocage ouvert ne correspond."
+      },
+      "id": "n-tool-resoudre",
+      "name": "resoudre_blocage",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [120, 320]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH boris AS (SELECT id FROM \"User\" WHERE email = 'boris@entrepreneurs.com' LIMIT 1),\nproj AS (SELECT id, nom FROM \"Project\" WHERE status <> 'ARCHIVE' AND nom ILIKE '%' || $1 || '%' ORDER BY \"updatedAt\" DESC LIMIT 1),\nins AS (\n  INSERT INTO \"Task\" (id, \"projectId\", titre, status, priorite, echeance, \"createdAt\", \"updatedAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), proj.id, $2, 'BACKLOG'::\"TaskStatus\",\n         NULLIF($4,'')::\"Priority\", NULLIF($3,'')::timestamptz, now(), now()\n  FROM proj\n  RETURNING id, titre\n),\nact AS (\n  INSERT INTO \"Activity\" (id, \"actorId\", \"projectId\", type, message, \"createdAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), boris.id, (SELECT id FROM proj),\n         'TACHE_CREEE'::\"ActivityType\", 'a créé la tâche « ' || ins.titre || ' » (via Jarvis)', now()\n  FROM boris, ins\n  RETURNING id\n)\nSELECT ins.id AS tache_id, ins.titre, (SELECT nom FROM proj) AS projet FROM ins",
+        "options": {
+          "queryReplacement": "={{ [ $fromAI('projet', 'Nom ou extrait du nom du projet', 'string'), $fromAI('titre', 'Titre de la tache', 'string'), $fromAI('echeance', 'Echeance au format ISO 8601 (ex 2026-08-15) — chaine vide si aucune', 'string'), $fromAI('priorite', 'P0, P1, P2 ou P3 — chaine vide si non precisee', 'string') ] }}"
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Créer une tâche dans le backlog d'un projet du cockpit (non assignée), avec priorité et échéance optionnelles. Journalise la création au nom de Boris. Résultat vide = projet introuvable."
+      },
+      "id": "n-tool-tache",
+      "name": "creer_tache",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [360, 320]
+    }
+  ],
+  "connections": {
+    "etat_cockpit": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "creer_blocage": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "resoudre_blocage": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "creer_tache": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

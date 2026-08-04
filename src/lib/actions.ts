@@ -71,10 +71,19 @@ function echec(erreur: unknown): EtatAction {
 
 const SUCCES: EtatAction = { erreur: null, ok: true }
 
-function revalider(projectId?: string) {
-  revalidatePath('/')
+/**
+ * Ne revalide que la route reellement touchee. Les pages du cockpit sont
+ * dynamiques (session en cookie) : le cache client les considere comme
+ * perimees d'office, elles se rechargent donc a la navigation sans qu'il
+ * faille invalider toute l'app a chaque petite mutation.
+ */
+function revaliderProjet(projectId: string) {
+  revalidatePath(`/projets/${projectId}`)
+}
+
+/** Seule la liste est concernee quand un projet apparait ou disparait. */
+function revaliderListeProjets() {
   revalidatePath('/projets')
-  if (projectId) revalidatePath(`/projets/${projectId}`)
 }
 
 /** Journalise une ligne d'activite. Toute mutation passe par ici. */
@@ -86,6 +95,25 @@ async function journaliser(
 ) {
   await prisma.activity.create({
     data: { actorId: acteur.id, projectId, type, message },
+  })
+}
+
+/**
+ * Meme journal, en une seule requete : un formulaire qui change trois champs
+ * ecrivait trois lignes en trois allers-retours successifs.
+ */
+function ecrireJournal(
+  acteur: Utilisateur,
+  projectId: string | null,
+  journal: ReadonlyArray<{ type: ActivityType; message: string }>,
+) {
+  return prisma.activity.createMany({
+    data: journal.map((ligne) => ({
+      actorId: acteur.id,
+      projectId,
+      type: ligne.type,
+      message: ligne.message,
+    })),
   })
 }
 
@@ -287,12 +315,13 @@ export async function modifierProjet(
 
     if (Object.keys(data).length === 0) return SUCCES
 
-    await prisma.project.update({ where: { id: projet.id }, data })
-    for (const ligne of journal) {
-      await journaliser(utilisateur, ligne.type, ligne.message, projet.id)
-    }
+    // Mise a jour et journal partent ensemble : un seul aller-retour vers la base.
+    await prisma.$transaction([
+      prisma.project.update({ where: { id: projet.id }, data }),
+      ecrireJournal(utilisateur, projet.id, journal),
+    ])
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -329,7 +358,7 @@ export async function creerProjet(
       `a créé le projet « ${nom} » (${STATUT_LABEL[status]}), confié à ${responsable.name}`,
       projet.id,
     )
-    revalider(projet.id)
+    revaliderListeProjets()
   } catch (erreur) {
     return echec(erreur)
   }
@@ -351,7 +380,7 @@ export async function archiverProjet(
     await prisma.project.update({ where: { id: projet.id }, data: { status: 'ARCHIVE' } })
     await journaliser(utilisateur, 'STATUT', `a archivé le projet « ${projet.nom} »`, projet.id)
 
-    revalider(projet.id)
+    revaliderProjet(projet.id)
     return SUCCES
   } catch (erreur) {
     return echec(erreur)
@@ -377,7 +406,7 @@ export async function supprimerProjet(
     // Le projet n'existe plus : la trace reste au niveau global (projectId null).
     await journaliser(utilisateur, 'STATUT', `a supprimé le projet « ${projet.nom} »`, null)
 
-    revalider()
+    revaliderListeProjets()
   } catch (erreur) {
     return echec(erreur)
   }

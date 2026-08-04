@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "atlas:sync": "tsx scripts/atlas-sync.ts",
+    "atlas:sync:dry": "tsx scripts/atlas-sync.ts --dry-run"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
