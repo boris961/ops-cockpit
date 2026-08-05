@@ -1,0 +1,75 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH boris AS (SELECT id FROM \"User\" WHERE email = 'boris@entrepreneurs.com' LIMIT 1),\nins AS (\n  INSERT INTO \"Project\" (id, nom, description, \"ownerId\", status, sante, avancement, \"prochainJalon\", \"dateCible\", \"createdAt\", \"updatedAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), $1, NULLIF($2,''), boris.id,\n         'CADRAGE'::\"ProjectStatus\", 'VERT'::\"Health\", 0, NULLIF($3,''), NULLIF($4,'')::timestamptz, now(), now()\n  FROM boris\n  RETURNING id, nom\n),\nact AS (\n  INSERT INTO \"Activity\" (id, \"actorId\", \"projectId\", type, message, \"createdAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), (SELECT id FROM boris), ins.id,\n         'STATUT'::\"ActivityType\", 'a créé le projet « ' || ins.nom || ' » (via Jarvis)', now()\n  FROM ins\n  RETURNING id\n)\nSELECT ins.id AS projet_id, ins.nom, 'CADRAGE' AS statut FROM ins",
+        "options": {
+          "queryReplacement": "={{ [ $fromAI('nom', 'Nom du nouveau projet', 'string'), $fromAI('description', 'Description courte (chaine vide si aucune)', 'string'), $fromAI('jalon', 'Prochain jalon (chaine vide si aucun)', 'string'), $fromAI('date_cible', 'Date cible AAAA-MM-JJ (chaine vide si aucune)', 'string') ] }}"
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Créer un nouveau projet dans le cockpit, porté par Boris, en statut Cadrage / santé verte. Paramètres : nom (requis), description, jalon et date_cible (optionnels, chaîne vide sinon). Journalisé. À utiliser quand Boris demande d'ajouter/créer un projet."
+      },
+      "id": "n-tool-creer-projet",
+      "name": "creer_projet",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [-580, 800]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH boris AS (SELECT id FROM \"User\" WHERE email = 'boris@entrepreneurs.com' LIMIT 1),\ncible AS (SELECT id, nom FROM \"Project\" WHERE nom ILIKE '%' || $1 || '%' ORDER BY \"updatedAt\" DESC LIMIT 1),\nupd AS (\n  UPDATE \"Project\" p SET\n    status = COALESCE(NULLIF($2,'')::\"ProjectStatus\", p.status),\n    sante = COALESCE(NULLIF($3,'')::\"Health\", p.sante),\n    \"prochainJalon\" = COALESCE(NULLIF($4,''), p.\"prochainJalon\"),\n    \"dateCible\" = COALESCE(NULLIF($5,'')::timestamptz, p.\"dateCible\"),\n    \"updatedAt\" = now()\n  FROM cible WHERE p.id = cible.id\n  RETURNING p.id, p.nom, p.status, p.sante\n),\nact AS (\n  INSERT INTO \"Activity\" (id, \"actorId\", \"projectId\", type, message, \"createdAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), boris.id, upd.id,\n         'STATUT'::\"ActivityType\",\n         'a mis à jour le projet « ' || upd.nom || ' » (' || upd.status || ' · ' || upd.sante || ' — via Jarvis)', now()\n  FROM boris, upd\n  RETURNING id\n)\nSELECT upd.id AS projet_id, upd.nom, upd.status::text AS statut, upd.sante::text AS sante FROM upd",
+        "options": {
+          "queryReplacement": "={{ [ $fromAI('projet', 'Nom ou extrait du nom du projet a modifier', 'string'), $fromAI('statut', 'Nouveau statut parmi CADRAGE, EN_COURS, A_RISQUE, EN_VALIDATION, TERMINE, ARCHIVE — chaine vide pour ne pas changer', 'string'), $fromAI('sante', 'Nouvelle sante parmi VERT, ORANGE, ROUGE — chaine vide pour ne pas changer', 'string'), $fromAI('jalon', 'Nouveau prochain jalon — chaine vide pour ne pas changer', 'string'), $fromAI('date_cible', 'Nouvelle date cible AAAA-MM-JJ — chaine vide pour ne pas changer', 'string') ] }}"
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Mettre à jour un projet existant du cockpit : statut (CADRAGE|EN_COURS|A_RISQUE|EN_VALIDATION|TERMINE|ARCHIVE), santé (VERT|ORANGE|ROUGE), prochain jalon, date cible — seuls les champs fournis changent. Journalisé. MODIFICATION de donnée existante : annoncer le changement à Boris et attendre sa confirmation avant d'appeler l'outil. Résultat vide = projet introuvable."
+      },
+      "id": "n-tool-modifier-projet",
+      "name": "modifier_projet",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [-360, 800]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH boris AS (SELECT id FROM \"User\" WHERE email = 'boris@entrepreneurs.com' LIMIT 1),\ncible AS (\n  SELECT t.id, t.titre, t.\"projectId\" FROM \"Task\" t JOIN \"Project\" p ON p.id = t.\"projectId\"\n  WHERE t.titre ILIKE '%' || $1 || '%' AND ($3 = '' OR p.nom ILIKE '%' || $3 || '%')\n  ORDER BY t.\"updatedAt\" DESC LIMIT 1\n),\nupd AS (\n  UPDATE \"Task\" t SET\n    status = COALESCE(NULLIF($2,'')::\"TaskStatus\", t.status),\n    echeance = COALESCE(NULLIF($4,'')::timestamptz, t.echeance),\n    \"updatedAt\" = now()\n  FROM cible WHERE t.id = cible.id\n  RETURNING t.id, t.titre, t.status\n),\nact AS (\n  INSERT INTO \"Activity\" (id, \"actorId\", \"projectId\", type, message, \"createdAt\")\n  SELECT 'c' || substr(md5(random()::text || clock_timestamp()::text), 1, 24), boris.id, cible.\"projectId\",\n         (CASE WHEN upd.status = 'TERMINE' THEN 'TACHE_FAITE' ELSE 'COMMENTAIRE' END)::\"ActivityType\",\n         (CASE WHEN upd.status = 'TERMINE' THEN 'a terminé la tâche « ' || upd.titre || ' » (via Jarvis)'\n               ELSE 'a déplacé la tâche « ' || upd.titre || ' » (' || upd.status || ' — via Jarvis)' END), now()\n  FROM boris, upd, cible\n  RETURNING id\n)\nSELECT upd.id AS tache_id, upd.titre, upd.status::text AS statut FROM upd",
+        "options": {
+          "queryReplacement": "={{ [ $fromAI('tache', 'Titre ou extrait du titre de la tache', 'string'), $fromAI('statut', 'Nouveau statut parmi BACKLOG, CETTE_SEMAINE, EN_COURS, EN_REVIEW, TERMINE — chaine vide pour ne pas changer', 'string'), $fromAI('projet', 'Nom du projet pour lever une ambiguite — chaine vide sinon', 'string'), $fromAI('echeance', 'Nouvelle echeance AAAA-MM-JJ — chaine vide pour ne pas changer', 'string') ] }}"
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Mettre à jour une tâche du cockpit : statut (BACKLOG|CETTE_SEMAINE|EN_COURS|EN_REVIEW|TERMINE) et/ou échéance, retrouvée par son titre (+ nom du projet si ambigu). « Terminé » journalise la tâche comme faite. MODIFICATION de donnée existante : annoncer le changement à Boris et attendre sa confirmation avant d'appeler l'outil. Résultat vide = tâche introuvable."
+      },
+      "id": "n-tool-modifier-tache",
+      "name": "modifier_tache",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [-140, 800]
+    }
+  ],
+  "connections": {
+    "creer_projet": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "modifier_projet": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "modifier_tache": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    }
+  }
+}

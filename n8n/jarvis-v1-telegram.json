@@ -108,17 +108,39 @@
     },
     {
       "parameters": {
-        "resource": "audio",
-        "operation": "transcribe",
-        "binaryPropertyName": "data",
-        "options": {
-          "language": "fr"
-        }
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model",
+              "value": "whisper-1"
+            },
+            {
+              "name": "language",
+              "value": "fr"
+            },
+            {
+              "name": "prompt",
+              "value": "Vocabulaire : SuperSales, Sembly, iClosed, HubSpot, Odoo, Looker, Clap, Alkimiy, Zoho, Stripe, n8n, Neon, Vercel, cockpit, Atlas Brain, Jarvis, Riven, Aikho, Clover, Mithril, Oscar, Tatouine, Entrepreneurs.com, Made To Scale, Anisse, Alec, Fabrice, Océane, Wassim, Naïma, Myriam, Aziz, Cédric, Sofian, Quentin, Sabrina, Mohamed, Jordan, Kelly, Venugopal, Aman, Prakhar."
+            }
+          ]
+        },
+        "options": {}
       },
       "id": "n-stt",
       "name": "Transcrire (Whisper)",
-      "type": "@n8n/n8n-nodes-langchain.openAi",
-      "typeVersion": 1.8,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [200, 200]
     },
     {
@@ -272,12 +294,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.elevenlabs.io/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb?output_format=mp3_44100_128",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/iCKVfVbyCo5AAswzTkkX?output_format=mp3_44100_128",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ text: $json.output, model_id: 'eleven_flash_v2_5' }) }}",
+        "jsonBody": "={{ JSON.stringify({ text: $json.output, model_id: 'eleven_flash_v2_5', voice_settings: { stability: 0.65, similarity_boost: 0.85, style: 0.15 } }) }}",
         "options": {
           "response": {
             "response": {

@@ -1,0 +1,50 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT coalesce(t.titre,'(sans titre)') AS titre,\n       to_char(t.date_call AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS date,\n       t.extraits\nFROM (\n  SELECT DISTINCT ON (cle) cle, titre, date_call,\n         ts_headline('french', coalesce(contenu,''), websearch_to_tsquery('french', $1),\n                     'MaxFragments=4, MaxWords=60, MinWords=15, FragmentDelimiter= … ') AS extraits\n  FROM jarvis_calls\n  WHERE to_tsvector('french', coalesce(titre,'') || ' ' || coalesce(contenu,''))\n        @@ websearch_to_tsquery('french', $1)\n  ORDER BY cle, created_at DESC\n) t\nORDER BY t.date_call DESC NULLS LAST\nLIMIT 5",
+        "options": {
+          "queryReplacement": "={{ [ $fromAI('termes', 'Mots-cles de recherche en francais, ex: SuperSales audit', 'string') ] }}"
+        },
+        "descriptionType": "manual",
+        "toolDescription": "Rechercher dans la mémoire des calls/réunions enregistrés de Boris (notes et transcripts Sembly) par mots-clés. Renvoie titre, date et extraits pertinents. À utiliser dès qu'il demande ce qui s'est dit dans un call, ce qu'a dit une personne sur un sujet, ou toute question de mémoire de réunion. Résultat vide = aucun call ne mentionne ces termes."
+      },
+      "id": "n-tool-chercher-calls",
+      "name": "chercher_calls",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [-360, 560]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT coalesce(t.titre,'(sans titre)') AS titre,\n       to_char(t.date_call AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS date,\n       t.participants\nFROM (\n  SELECT DISTINCT ON (cle) cle, titre, date_call, participants\n  FROM jarvis_calls\n  ORDER BY cle, created_at DESC\n) t\nORDER BY t.date_call DESC NULLS LAST\nLIMIT 10",
+        "options": {},
+        "descriptionType": "manual",
+        "toolDescription": "Lister les 10 derniers calls/réunions en mémoire : titre, date, participants. À utiliser pour « mes derniers calls », « de quoi parlait le call de lundi », ou pour repérer un call avant une recherche ciblée avec chercher_calls."
+      },
+      "id": "n-tool-derniers-calls",
+      "name": "derniers_calls",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.6,
+      "position": [-580, 560]
+    }
+  ],
+  "connections": {
+    "chercher_calls": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    },
+    "derniers_calls": {
+      "ai_tool": [
+        [
+          { "node": "Cockpit MCP Server", "type": "ai_tool", "index": 0 }
+        ]
+      ]
+    }
+  }
+}
