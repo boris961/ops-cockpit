@@ -1,7 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Flag, LayoutGrid, List, Users } from 'lucide-react'
+import { AlertTriangle, Flag, Layers, LayoutGrid, List, Users } from 'lucide-react'
 
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -42,6 +43,8 @@ export function VueProjets({
   projets: ProjetItem[]
   charge: LigneCharge[]
 }) {
+  const [grouperParStatut, setGrouperParStatut] = useState(false)
+
   return (
     <Tabs defaultValue="liste" className="gap-4">
       <TabsList className="self-start bg-card">
@@ -59,8 +62,28 @@ export function VueProjets({
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="liste">
-        <VueListe projets={projets} />
+      <TabsContent value="liste" className="space-y-3">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            aria-pressed={grouperParStatut}
+            onClick={() => setGrouperParStatut((valeur) => !valeur)}
+            className={`inline-flex h-8 items-center gap-2 rounded-lg border bg-card px-3 text-sm transition-all ${
+              grouperParStatut
+                ? 'nav-actif border-brand/50 font-semibold text-white'
+                : 'border-white/12 text-muted-foreground hover:border-white/25 hover:text-foreground'
+            }`}
+          >
+            <Layers className="size-4" strokeWidth={1.75} />
+            Grouper par statut
+          </button>
+        </div>
+
+        {grouperParStatut ? (
+          <VueListeGroupee projets={projets} />
+        ) : (
+          <VueListe projets={projets} />
+        )}
       </TabsContent>
 
       <TabsContent value="kanban">
@@ -74,13 +97,28 @@ export function VueProjets({
   )
 }
 
-function VueListe({ projets }: { projets: ProjetItem[] }) {
+function VueListe({
+  projets,
+  masquerStatut = false,
+}: {
+  projets: ProjetItem[]
+  masquerStatut?: boolean
+}) {
+  const colonnes = [
+    'Projet',
+    'Directeur',
+    ...(masquerStatut ? [] : ['Statut']),
+    'Santé',
+    'Avancement',
+    'Prochain jalon',
+    'Blocages',
+  ]
   return (
     <Card className="verre rounded-xl ring-1 ring-white/10">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            {['Projet', 'Directeur', 'Statut', 'Santé', 'Avancement', 'Prochain jalon', 'Blocages'].map(
+            {colonnes.map(
               (colonne, index) => (
                 <TableHead
                   key={colonne}
@@ -107,9 +145,11 @@ function VueListe({ projets }: { projets: ProjetItem[] }) {
                 <BadgesDepartements departements={p.departements} className="mt-1" />
               </TableCell>
               <TableCell className="py-3 text-muted-foreground">{p.directeur}</TableCell>
-              <TableCell className="py-3">
-                <PuceStatut statut={p.statut} />
-              </TableCell>
+              {masquerStatut ? null : (
+                <TableCell className="py-3">
+                  <PuceStatut statut={p.statut} />
+                </TableCell>
+              )}
               <TableCell className="py-3">
                 <PastilleSante sante={p.sante} />
               </TableCell>
@@ -126,7 +166,10 @@ function VueListe({ projets }: { projets: ProjetItem[] }) {
           ))}
           {projets.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
+              <TableCell
+                colSpan={colonnes.length}
+                className="py-8 text-center text-muted-foreground"
+              >
                 Aucun projet.
               </TableCell>
             </TableRow>
@@ -134,6 +177,49 @@ function VueListe({ projets }: { projets: ProjetItem[] }) {
         </TableBody>
       </Table>
     </Card>
+  )
+}
+
+/**
+ * Liste groupee par statut : une section par statut present (dans l'ordre du
+ * flux Cadrage -> Termine, puis Archive), avec le meme tableau que la vue a
+ * plat — colonne Statut masquee, devenue redondante.
+ */
+function VueListeGroupee({ projets }: { projets: ProjetItem[] }) {
+  const groupes = [...STATUTS, 'ARCHIVE']
+    .map((statut) => ({
+      statut,
+      liste: projets.filter((p) => p.statut === statut),
+    }))
+    .filter((groupe) => groupe.liste.length > 0)
+
+  if (groupes.length === 0) {
+    return (
+      <Card className="verre rounded-xl ring-1 ring-white/10">
+        <p className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun projet.</p>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {groupes.map((groupe) => (
+        <section key={groupe.statut}>
+          <header className="mb-2 flex items-center gap-2 px-1">
+            <span
+              aria-hidden
+              className="size-2 rounded-full"
+              style={{ backgroundColor: STATUT_COLOR[groupe.statut] }}
+            />
+            <h2 className="text-sm font-medium">{STATUT_LABEL[groupe.statut] ?? groupe.statut}</h2>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {groupe.liste.length}
+            </span>
+          </header>
+          <VueListe projets={groupe.liste} masquerStatut />
+        </section>
+      ))}
+    </div>
   )
 }
 
