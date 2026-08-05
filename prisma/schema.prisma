@@ -187,3 +187,22 @@ model MetricDaily {
   blocagesOuverts Int
   tachesEnRetard  Int
 }
+
+/// Table de la chaîne Jarvis (calls Sembly → Atlas). Déclarée ici pour que
+/// `prisma db push` la préserve lors des deploys — créée/entretenue par le
+/// webhook n8n et scripts/calls-sync.ts (y compris son index plein-texte,
+/// recréé automatiquement s'il saute).
+model JarvisCall {
+  id           Int       @id @default(autoincrement())
+  cle          String
+  type         String
+  titre        String?
+  dateCall     DateTime? @map("date_call") @db.Timestamptz(6)
+  participants Json?
+  contenu      String?
+  brut         Json?
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  processedAt  DateTime? @map("processed_at") @db.Timestamptz(6)
+
+  @@map("jarvis_calls")
+}
