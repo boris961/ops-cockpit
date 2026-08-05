@@ -8,18 +8,17 @@ export type LigneCharge = {
   nom: string
   aFaire: number
   enCours: number
-  terminees: number
+  projets: number
   total: number
 }
 
 /**
- * Segments d'une echelle ordonnee (a faire -> en cours -> termine).
- * La legende chiffree accompagne toujours les couleurs.
+ * Segments de la charge restante (a faire -> en cours). Les taches terminees
+ * ne pesent plus ici : la charge mesure ce qu'il reste a faire.
  */
 const SEGMENTS = [
   { cle: 'aFaire', libelle: 'À faire', couleur: 'var(--attente)' },
   { cle: 'enCours', libelle: 'En cours', couleur: 'var(--chart-2)' },
-  { cle: 'terminees', libelle: 'Terminées', couleur: 'var(--chart-5)' },
 ] as const
 
 export function VueCharge({ lignes }: { lignes: LigneCharge[] }) {
@@ -27,13 +26,13 @@ export function VueCharge({ lignes }: { lignes: LigneCharge[] }) {
     return (
       <Card className="verre rounded-xl ring-1 ring-white/10">
         <p className="px-5 py-8 text-center text-sm text-muted-foreground">
-          Aucune tâche à répartir.
+          Aucune charge à répartir.
         </p>
       </Card>
     )
   }
 
-  const maximum = Math.max(...lignes.map((ligne) => ligne.total))
+  const maximum = Math.max(1, ...lignes.map((ligne) => ligne.total))
 
   return (
     <Card className="verre gap-0 rounded-xl py-0 ring-1 ring-white/10">
@@ -48,6 +47,7 @@ export function VueCharge({ lignes }: { lignes: LigneCharge[] }) {
             {segment.libelle}
           </span>
         ))}
+        <span className="ml-auto text-xs text-muted-foreground">Tâches terminées exclues</span>
       </div>
 
       <ul className="divide-y divide-border">
@@ -71,15 +71,24 @@ export function VueCharge({ lignes }: { lignes: LigneCharge[] }) {
                     {ligne.nom}
                   </p>
                   <p className="shrink-0 text-xs text-muted-foreground">
+                    {!nonAssigne ? (
+                      <>
+                        <span className="text-base font-medium text-foreground tabular-nums">
+                          {ligne.projets}
+                        </span>{' '}
+                        projet{ligne.projets > 1 ? 's' : ''}
+                        <span className="mx-2 opacity-40">·</span>
+                      </>
+                    ) : null}
                     <span className="text-base font-medium text-foreground tabular-nums">
                       {ligne.total}
                     </span>{' '}
-                    tâche{ligne.total > 1 ? 's' : ''}
+                    tâche{ligne.total > 1 ? 's' : ''} restante{ligne.total > 1 ? 's' : ''}
                   </p>
                 </div>
 
-                {/* Barre proportionnelle a la charge la plus lourde, segments
-                    separes par 2px de surface. */}
+                {/* Barre proportionnelle a la charge restante la plus lourde,
+                    segments separes par 2px de surface. */}
                 <div
                   className="mt-2 flex h-2 gap-0.5 overflow-hidden rounded-full"
                   style={{ width: `${Math.max(8, (ligne.total / maximum) * 100)}%` }}

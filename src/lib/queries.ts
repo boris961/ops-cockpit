@@ -195,25 +195,44 @@ export async function getPorteurs() {
 }
 
 /**
- * Charge par personne : taches assignees dans le perimetre visible, reparties
- * en « a faire » / « en cours » / « terminees ».
+ * Charge par personne : nombre de projets portes (hors termines / archives)
+ * et taches assignees restantes (tous statuts sauf termine), dans le
+ * perimetre visible. Les taches terminees ne pesent plus dans la charge.
  */
 export async function getCharge({ porteur }: Filtres = {}) {
   const utilisateur = await utilisateurCourant()
 
-  const taches = await prisma.task.findMany({
-    // Les projets archives ne pesent plus sur la charge de personne.
-    where: {
-      project: {
-        AND: [porteeProjets(utilisateur), filtreOwner(porteur), { status: { not: 'ARCHIVE' } }],
+  const [taches, projetsPortes] = await Promise.all([
+    prisma.task.findMany({
+      // Les projets archives ne pesent plus sur la charge de personne.
+      where: {
+        status: { not: 'TERMINE' },
+        project: {
+          AND: [porteeProjets(utilisateur), filtreOwner(porteur), { status: { not: 'ARCHIVE' } }],
+        },
       },
-    },
-    select: { status: true, owner: { select: { id: true, name: true } } },
-  })
+      select: { status: true, owner: { select: { id: true, name: true } } },
+    }),
+    prisma.project.groupBy({
+      by: ['ownerId'],
+      where: {
+        AND: [
+          porteeProjets(utilisateur),
+          filtreOwner(porteur),
+          { status: { notIn: ['TERMINE', 'ARCHIVE'] } },
+        ],
+      },
+      _count: { _all: true },
+    }),
+  ])
+
+  const projetsParPersonne = new Map(
+    projetsPortes.map((groupe) => [groupe.ownerId, groupe._count._all]),
+  )
 
   const parPersonne = new Map<
     string,
-    { id: string; nom: string; aFaire: number; enCours: number; terminees: number; total: number }
+    { id: string; nom: string; aFaire: number; enCours: number; projets: number; total: number }
   >()
 
   for (const tache of taches) {
@@ -223,19 +242,39 @@ export async function getCharge({ porteur }: Filtres = {}) {
       nom: tache.owner?.name ?? 'Non assignées',
       aFaire: 0,
       enCours: 0,
-      terminees: 0,
+      projets: projetsParPersonne.get(cle) ?? 0,
       total: 0,
     }
 
-    if (tache.status === 'TERMINE') ligne.terminees += 1
-    else if (tache.status === 'EN_COURS' || tache.status === 'EN_REVIEW') ligne.enCours += 1
+    if (tache.status === 'EN_COURS' || tache.status === 'EN_REVIEW') ligne.enCours += 1
     else ligne.aFaire += 1
     ligne.total += 1
 
     parPersonne.set(cle, ligne)
   }
 
-  const lignes = [...parPersonne.values()].sort((a, b) => b.total - a.total)
+  // Les porteurs de projets sans tache restante apparaissent quand meme.
+  const sansTache = [...projetsParPersonne.keys()].filter((id) => !parPersonne.has(id))
+  if (sansTache.length > 0) {
+    const porteurs = await prisma.user.findMany({
+      where: { id: { in: sansTache } },
+      select: { id: true, name: true },
+    })
+    for (const personne of porteurs) {
+      parPersonne.set(personne.id, {
+        id: personne.id,
+        nom: personne.name,
+        aFaire: 0,
+        enCours: 0,
+        projets: projetsParPersonne.get(personne.id) ?? 0,
+        total: 0,
+      })
+    }
+  }
+
+  const lignes = [...parPersonne.values()].sort(
+    (a, b) => b.total - a.total || b.projets - a.projets,
+  )
 
   // Les taches sans responsable ferment la liste : ce n'est la charge de personne.
   return [
