@@ -7,6 +7,7 @@ import { dateCourte, initiales } from '@/lib/cockpit'
 import { cn } from '@/lib/utils'
 import { Carte } from '@/components/cockpit/carte'
 import { FiltreStatut } from '@/components/cockpit/filtre-statut'
+import { StatutTacheRapide } from '@/components/cockpit/statut-tache-rapide'
 import {
   Table,
   TableBody,
@@ -141,9 +142,11 @@ export default async function Taches(props: PageProps<'/taches'>) {
                   >
                     {ligne.titre}
                   </Link>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {STATUT_TACHE_LABEL[ligne.statut] ?? ligne.statut}
-                  </p>
+                  <StatutTacheRapide
+                    tacheId={ligne.id}
+                    statut={ligne.statut}
+                    titre={ligne.titre}
+                  />
                 </TableCell>
 
                 <TableCell className="py-3 text-muted-foreground">
