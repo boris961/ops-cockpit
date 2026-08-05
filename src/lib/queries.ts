@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client'
+import type { Prisma, TaskStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { estAdmin, utilisateurCourant, type Utilisateur } from '@/lib/autorisation'
@@ -245,25 +245,46 @@ export async function getCharge({ porteur }: Filtres = {}) {
 }
 
 /**
- * Taches datees, de la plus urgente a la plus lointaine. Un utilisateur voit
- * les taches de ses projets et celles qui lui sont assignees ; COO / HEAD
- * voient tout.
+ * Taches datees. Vue « a venir » (statuts non termines, de la plus urgente a
+ * la plus lointaine, filtrable par statut) ou vue « terminees » (les plus
+ * recentes d'abord). Un utilisateur voit les taches de ses projets et celles
+ * qui lui sont assignees ; COO / HEAD voient tout.
  */
-export async function getTachesAVenir() {
+export async function getTachesAVenir({
+  terminees = false,
+  statut,
+}: { terminees?: boolean; statut?: TaskStatus } = {}) {
   const utilisateur = await utilisateurCourant()
   if (!utilisateur) return []
 
   return prisma.task.findMany({
     where: {
       echeance: { not: null },
+      status: terminees ? 'TERMINE' : (statut ?? { not: 'TERMINE' }),
       OR: [{ project: porteeProjets(utilisateur) }, { ownerId: utilisateur.id }],
     },
     include: {
       owner: { select: { id: true, name: true } },
       project: { select: { id: true, nom: true } },
     },
-    orderBy: { echeance: 'asc' },
+    orderBy: { echeance: terminees ? 'desc' : 'asc' },
   })
+}
+
+/** Compteurs des onglets A venir / Terminees, dans le meme perimetre. */
+export async function getComptesTaches() {
+  const utilisateur = await utilisateurCourant()
+  if (!utilisateur) return { aVenir: 0, terminees: 0 }
+
+  const base: Prisma.TaskWhereInput = {
+    echeance: { not: null },
+    OR: [{ project: porteeProjets(utilisateur) }, { ownerId: utilisateur.id }],
+  }
+  const [aVenir, terminees] = await Promise.all([
+    prisma.task.count({ where: { ...base, status: { not: 'TERMINE' } } }),
+    prisma.task.count({ where: { ...base, status: 'TERMINE' } }),
+  ])
+  return { aVenir, terminees }
 }
 
 /** Page admin : utilisateurs et volume de projets portes. */

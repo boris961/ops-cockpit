@@ -10,7 +10,7 @@ import { ROLE_LABEL, initiales } from '@/lib/cockpit'
 const NAV = [
   { href: '/', label: "Vue d'ensemble", icon: LayoutDashboard },
   { href: '/projets', label: 'Projets', icon: FolderKanban },
-  { href: '/taches', label: 'Tâches à venir', icon: CalendarClock },
+  { href: '/taches', label: 'Tâches', icon: CalendarClock },
 ] as const
 
 const NAV_ADMIN = { href: '/utilisateurs', label: 'Utilisateurs', icon: Users } as const

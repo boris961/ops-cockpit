@@ -1,10 +1,12 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { AlertTriangle } from 'lucide-react'
 
-import { getTachesAVenir } from '@/lib/queries'
+import { getComptesTaches, getTachesAVenir } from '@/lib/queries'
 import { dateCourte, initiales } from '@/lib/cockpit'
 import { cn } from '@/lib/utils'
 import { Carte } from '@/components/cockpit/carte'
+import { FiltreStatut } from '@/components/cockpit/filtre-statut'
 import {
   Table,
   TableBody,
@@ -13,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import type { TaskStatus } from '@prisma/client'
 
 const STATUT_TACHE_LABEL: Record<string, string> = {
   BACKLOG: 'Backlog',
@@ -22,8 +25,22 @@ const STATUT_TACHE_LABEL: Record<string, string> = {
   TERMINE: 'Terminé',
 }
 
-export default async function TachesAVenir() {
-  const taches = await getTachesAVenir()
+const STATUTS_A_VENIR = ['BACKLOG', 'CETTE_SEMAINE', 'EN_COURS', 'EN_REVIEW'] as const
+
+export default async function Taches(props: PageProps<'/taches'>) {
+  const { vue, statut } = await props.searchParams
+  const voirTerminees = vue === 'terminees'
+  const statutChoisi =
+    !voirTerminees &&
+    typeof statut === 'string' &&
+    (STATUTS_A_VENIR as readonly string[]).includes(statut)
+      ? (statut as TaskStatus)
+      : undefined
+
+  const [taches, comptes] = await Promise.all([
+    getTachesAVenir({ terminees: voirTerminees, statut: statutChoisi }),
+    getComptesTaches(),
+  ])
   const maintenant = new Date()
 
   const lignes = taches.map((tache) => ({
@@ -41,24 +58,63 @@ export default async function TachesAVenir() {
 
   const enRetard = lignes.filter((ligne) => ligne.enRetard).length
 
+  // Le filtre statut ne concerne que la vue « A venir » : il survit au retour
+  // depuis l'onglet Terminées, mais n'y est pas propagé.
+  const lienAVenir = statutChoisi ? `/taches?statut=${statutChoisi}` : '/taches'
+  const lienTerminees = '/taches?vue=terminees'
+
   return (
     <div className="px-6 py-8 lg:px-10">
       <header className="mb-8">
-        <h1 className="text-4xl font-light leading-tight tracking-tight">Tâches à venir</h1>
+        <h1 className="text-4xl font-light leading-tight tracking-tight">Tâches</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {lignes.length} tâche{lignes.length > 1 ? 's' : ''} datée
-          {lignes.length > 1 ? 's' : ''}, de la plus urgente à la plus lointaine
-          {enRetard > 0 ? (
+          {voirTerminees ? (
             <>
-              {' '}
-              — <span className="font-medium text-bad">{enRetard} en retard</span>
+              {lignes.length} tâche{lignes.length > 1 ? 's' : ''} terminée
+              {lignes.length > 1 ? 's' : ''}, les plus récentes d&apos;abord.
             </>
-          ) : null}
-          .
+          ) : (
+            <>
+              {lignes.length} tâche{lignes.length > 1 ? 's' : ''} datée
+              {lignes.length > 1 ? 's' : ''}
+              {statutChoisi ? ` (${STATUT_TACHE_LABEL[statutChoisi]})` : ''}, de la plus urgente à
+              la plus lointaine
+              {enRetard > 0 ? (
+                <>
+                  {' '}
+                  — <span className="font-medium text-bad">{enRetard} en retard</span>
+                </>
+              ) : null}
+              .
+            </>
+          )}
         </p>
       </header>
 
-      <Carte titre="Échéancier" contenuClassName="px-0">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+        <nav aria-label="Vue" className="flex items-center gap-2">
+          <FiltreLien
+            href={lienAVenir}
+            actif={!voirTerminees}
+            libelle="À venir"
+            compte={comptes.aVenir}
+          />
+          <FiltreLien
+            href={lienTerminees}
+            actif={voirTerminees}
+            libelle="Terminées"
+            compte={comptes.terminees}
+          />
+        </nav>
+
+        {!voirTerminees ? (
+          <Suspense fallback={null}>
+            <FiltreStatut />
+          </Suspense>
+        ) : null}
+      </div>
+
+      <Carte titre={voirTerminees ? 'Archive' : 'Échéancier'} contenuClassName="px-0">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -136,7 +192,11 @@ export default async function TachesAVenir() {
             {lignes.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                  Aucune tâche avec une échéance.
+                  {voirTerminees
+                    ? 'Aucune tâche terminée pour le moment.'
+                    : statutChoisi
+                      ? 'Aucune tâche à venir avec ce filtre.'
+                      : 'Aucune tâche avec une échéance.'}
                 </TableCell>
               </TableRow>
             ) : null}
@@ -144,5 +204,35 @@ export default async function TachesAVenir() {
         </Table>
       </Carte>
     </div>
+  )
+}
+
+function FiltreLien({
+  href,
+  actif,
+  libelle,
+  compte,
+}: {
+  href: string
+  actif: boolean
+  libelle: string
+  compte: number
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={actif ? 'page' : undefined}
+      className={cn(
+        // `bg-card` sur les deux états, comme sur la page Projets : ces
+        // pastilles reposent sur le décor, qui ne doit pas transparaître.
+        'inline-flex h-8 items-center gap-2 rounded-lg border bg-card px-3 text-sm transition-all',
+        actif
+          ? 'nav-actif border-brand/50 font-semibold text-white'
+          : 'border-white/12 text-muted-foreground hover:border-white/25 hover:text-foreground',
+      )}
+    >
+      {libelle}
+      <span className="text-xs tabular-nums opacity-70">{compte}</span>
+    </Link>
   )
 }
