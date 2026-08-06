@@ -119,7 +119,7 @@ export default async function Taches(props: PageProps<'/taches'>) {
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              {['Tâche', 'Projet', 'Responsable', 'Échéance'].map((colonne, index) => (
+              {['Tâche', 'Statut', 'Projet', 'Responsable', 'Échéance'].map((colonne, index) => (
                 <TableHead
                   key={colonne}
                   className={cn(
@@ -142,6 +142,9 @@ export default async function Taches(props: PageProps<'/taches'>) {
                   >
                     {ligne.titre}
                   </Link>
+                </TableCell>
+
+                <TableCell className="py-3">
                   <StatutTacheRapide
                     tacheId={ligne.id}
                     statut={ligne.statut}
@@ -194,7 +197,7 @@ export default async function Taches(props: PageProps<'/taches'>) {
 
             {lignes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                   {voirTerminees
                     ? 'Aucune tâche terminée pour le moment.'
                     : statutChoisi

@@ -38,7 +38,7 @@ export function StatutTacheRapide({
   }, [etat, router])
 
   return (
-    <form action={action} className="mt-1">
+    <form action={action}>
       <input type="hidden" name="tacheId" value={tacheId} />
       <label className="sr-only" htmlFor={`statut-rapide-${tacheId}`}>
         Statut de la tâche {titre}
