@@ -18,7 +18,7 @@
     },
     {
       "parameters": {
-        "content": "### Les 9 outils\n\n- **etat_cockpit** — projets actifs : santé, avancement (calculé comme dans l'app), tâches en retard, blocages, jalons\n- **creer_blocage** — signale un blocage (statut Bloqué, comme le bouton de l'app) + journalise l'activité\n- **resoudre_blocage** — clôture un blocage par son titre + journalise\n- **creer_tache** — ajoute une tâche au backlog d'un projet + journalise\n- **chercher_calls** — recherche plein-texte (français) dans la mémoire des calls Sembly, extraits pertinents\n- **derniers_calls** — les 10 derniers calls (titre, date, participants)\n- **creer_projet** — nouveau projet (Cadrage, porté par Boris) + journal\n- **modifier_projet** — statut / santé / jalon / date cible d’un projet + journal (confirmation vocale requise)\n- **modifier_tache** — statut / échéance d’une tâche + journal (confirmation vocale requise)\n\nRésultat vide sur les écritures = projet/blocage introuvable (le dire à l'utilisateur).",
+        "content": "### Les 12 outils\n\n- **etat_cockpit** — projets actifs : santé, avancement (calculé comme dans l'app), tâches en retard, blocages, jalons\n- **creer_blocage** — signale un blocage (statut Bloqué, comme le bouton de l'app) + journalise l'activité\n- **resoudre_blocage** — clôture un blocage par son titre + journalise\n- **creer_tache** — ajoute une tâche au backlog d'un projet + journalise\n- **chercher_calls** — recherche plein-texte (français) dans la mémoire des calls Sembly, extraits pertinents\n- **derniers_calls** — les 10 derniers calls (titre, date, participants)\n- **creer_projet** — nouveau projet (Cadrage, porté par Boris) + journal\n- **modifier_projet** — statut / santé / jalon / date cible d’un projet + journal (confirmation vocale requise)\n- **modifier_tache** — statut / échéance d’une tâche + journal (confirmation vocale requise)\n- **chercher_slack** — recherche dans les messages Slack (syntaxe from:/in:/to:me)\n- **envoyer_slack** / **envoyer_dm_slack** — poster en canal / en DM au nom de Boris (confirmation du texte exact requise)\n\nRésultat vide sur les écritures = projet/blocage introuvable (le dire à l'utilisateur).",
         "height": 340,
         "width": 380,
         "color": 4
@@ -213,6 +213,73 @@
         -140,
         800
       ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "search",
+        "query": "={{ $fromAI('requete', 'Requete de recherche Slack. Syntaxe supportee : mots-cles, from:@personne, in:#canal, to:me, after:AAAA-MM-JJ. Ex: to:me after:2026-08-04 pour les messages recents adresses a Boris', 'string') }}",
+        "limit": 10,
+        "options": {},
+        "descriptionType": "manual",
+        "toolDescription": "Chercher dans les messages Slack de Boris (canaux, groupes et DM auxquels il a accès). Utilise la syntaxe Slack : from:@personne, in:#canal, to:me, after:AAAA-MM-JJ, mots-clés. Pour un récap des messages en attente de réponse : chercher to:me sur les derniers jours puis vérifier qui a parlé en dernier. Renvoie les messages avec auteur, canal et permalien."
+      },
+      "id": "n-tool-slack-chercher",
+      "name": "chercher_slack",
+      "type": "n8n-nodes-base.slackTool",
+      "typeVersion": 2.2,
+      "position": [
+        -580,
+        1060
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "={{ $fromAI('canal', 'Nom du canal Slack sans le #, ex: support-hubspot', 'string') }}"
+        },
+        "text": "={{ $fromAI('texte', 'Texte exact du message a poster, tel que confirme par Boris', 'string') }}",
+        "otherOptions": {},
+        "descriptionType": "manual",
+        "toolDescription": "Poster un message dans un canal Slack, AU NOM DE BORIS. IMPÉRATIF : ne jamais appeler cet outil sans avoir relu à Boris le texte exact et le canal, et reçu sa confirmation explicite (« confirme », « envoie »). Paramètres : canal (sans #), texte."
+      },
+      "id": "n-tool-slack-canal",
+      "name": "envoyer_slack",
+      "type": "n8n-nodes-base.slackTool",
+      "typeVersion": 2.2,
+      "position": [
+        -360,
+        1060
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "user",
+        "user": {
+          "__rl": true,
+          "mode": "username",
+          "value": "={{ $fromAI('utilisateur', 'Nom d utilisateur Slack du destinataire, ex: lea', 'string') }}"
+        },
+        "text": "={{ $fromAI('texte', 'Texte exact du message a envoyer, tel que confirme par Boris', 'string') }}",
+        "otherOptions": {},
+        "descriptionType": "manual",
+        "toolDescription": "Envoyer un message privé (DM) Slack à une personne, AU NOM DE BORIS. IMPÉRATIF : ne jamais appeler cet outil sans avoir relu à Boris le texte exact et le destinataire, et reçu sa confirmation explicite. Paramètres : utilisateur (nom Slack), texte."
+      },
+      "id": "n-tool-slack-dm",
+      "name": "envoyer_dm_slack",
+      "type": "n8n-nodes-base.slackTool",
+      "typeVersion": 2.2,
+      "position": [
+        -140,
+        1060
+      ]
     }
   ],
   "connections": {
@@ -305,6 +372,39 @@
       ]
     },
     "modifier_tache": {
+      "ai_tool": [
+        [
+          {
+            "node": "Cockpit MCP Server",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "chercher_slack": {
+      "ai_tool": [
+        [
+          {
+            "node": "Cockpit MCP Server",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "envoyer_slack": {
+      "ai_tool": [
+        [
+          {
+            "node": "Cockpit MCP Server",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "envoyer_dm_slack": {
       "ai_tool": [
         [
           {

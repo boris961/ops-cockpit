@@ -18,6 +18,11 @@ import {
 import { NotesProjet, type NoteItem } from '@/components/cockpit/notes-projet'
 import { OngletsProjet } from '@/components/cockpit/onglets-projet'
 import { ReplaysProjet, type ReplayItem } from '@/components/cockpit/replays-projet'
+import {
+  AjoutRessource,
+  RessourcesProjet,
+  type RessourceItem,
+} from '@/components/cockpit/ressources-projet'
 import { TachesProjet, type TacheItem } from '@/components/cockpit/taches-projet'
 
 export default async function DetailProjet(props: PageProps<'/projets/[id]'>) {
@@ -89,6 +94,16 @@ export default async function DetailProjet(props: PageProps<'/projets/[id]'>) {
     dateLisible: replay.date ? dateCourte(replay.date) : null,
   }))
 
+  const ressources: RessourceItem[] = projet.ressources.map((ressource) => ({
+    id: ressource.id,
+    titre: ressource.titre,
+    url: ressource.url,
+    type: ressource.type,
+    nomFichier: ressource.nomFichier,
+    taille: ressource.taille,
+    date: tempsRelatif(ressource.createdAt, maintenant),
+  }))
+
   return (
     <div className="px-6 py-8 lg:px-10">
       <Link
@@ -147,6 +162,21 @@ export default async function DetailProjet(props: PageProps<'/projets/[id]'>) {
             <aside className="min-w-0">
               <Carte titre="Replays des calls" rail>
                 <ReplaysProjet projectId={projet.id} replays={replays} />
+              </Carte>
+            </aside>
+          </div>
+        }
+        ressources={
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+            <div className="min-w-0">
+              <Carte titre="Ressources du projet">
+                <RessourcesProjet ressources={ressources} />
+              </Carte>
+            </div>
+
+            <aside className="min-w-0">
+              <Carte titre="Ajouter une ressource" rail>
+                <AjoutRessource projectId={projet.id} />
               </Carte>
             </aside>
           </div>

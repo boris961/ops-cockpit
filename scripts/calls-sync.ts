@@ -53,6 +53,10 @@ const DDL = `CREATE TABLE IF NOT EXISTS jarvis_calls (
   processed_at timestamptz
 )`
 
+/** Index plein-texte français — alimente l'outil MCP `chercher_calls` (palier A phase 2). */
+const DDL_INDEX = `CREATE INDEX IF NOT EXISTS jarvis_calls_fts ON jarvis_calls
+  USING GIN (to_tsvector('french', coalesce(titre,'') || ' ' || coalesce(contenu,'')))`
+
 /* --------------------------------------------------------------- helpers */
 
 const horodatage = new Intl.DateTimeFormat('fr-FR', {
@@ -154,6 +158,7 @@ async function main() {
   const prisma = new PrismaClient({ datasources: { db: { url: process.env.DIRECT_DB } } })
 
   await prisma.$executeRawUnsafe(DDL)
+  await prisma.$executeRawUnsafe(DDL_INDEX)
   const lignes = await prisma.$queryRawUnsafe<Ligne[]>(
     `SELECT id, cle, type, titre, date_call, participants, contenu
      FROM jarvis_calls

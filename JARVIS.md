@@ -77,6 +77,8 @@ cp launchd/com.boris.jarvis-calls-sync.plist ~/Library/LaunchAgents/ && launchct
 ```
 La sync tourne toutes les 30 min (log : `~/Library/Logs/jarvis-calls-sync.log`). Test sans attendre un vrai call : dans Sembly, ouvrir une réunion passée → bouton **Zap** → déclencher l'automation manuellement. NB : le schéma exact du payload Sembly n'étant pas documenté publiquement, le nœud « Normaliser » extrait au mieux et conserve le brut en base (`jarvis_calls.brut`) — si une note sort mal formée, ajuster le mapping dans ce nœud.
 
+**Palier B — enrichissement (`scripts/calls-enrich.ts`)** : repasse derrière la sync (launchd 30 min) et, via l'API Claude, convertit les participants en wikilinks [[People]] (mapping mémorisé dans `85_Jarvis/Mapping-People.md`), insère une section « 🧭 Synthèse Atlas » (résumé, décisions, actions, risques, [[projets]] liés), dépose les brouillons de Decision Records dans `00_Inbox`, et envoie sur Telegram les actions concernant Boris. Prérequis dans le `.env` : `ANTHROPIC_API_KEY` (requis), `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` (optionnels, pour le ping). Une note est marquée `enrichi: true` en front-matter ; retirer la clé pour forcer un re-passage. Coût : quelques centimes par call.
+
 ## 4. Dépannage
 - **`DIRECT_DB` manquant** : le script lit `.env` à la racine du repo — lance-le depuis `ops-cockpit/ops-cockpit`.
 - **Carte non appariée** : ajoute `cockpit_id: <id>` (listé par la sync et dans la Synthèse) au front-matter de la carte.

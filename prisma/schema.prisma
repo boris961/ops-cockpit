@@ -66,6 +66,11 @@ enum ActivityType {
   LIVRABLE
 }
 
+enum ResourceType {
+  LIEN
+  FICHIER
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -104,6 +109,7 @@ model Project {
   membres   User[]     @relation("MembresProjet")
   notes     Note[]
   replays   Replay[]
+  ressources Resource[]
   @@index([status])
   @@index([ownerId])
 }
@@ -129,6 +135,21 @@ model Replay {
   url       String
   date      DateTime?
   createdAt DateTime  @default(now())
+  @@index([projectId])
+}
+
+/// Ressource attachée à un projet : lien externe, ou fichier stocké sur
+/// Vercel Blob (type FICHIER, avec nom d'origine et taille en octets).
+model Resource {
+  id         String       @id @default(cuid())
+  projectId  String
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  titre      String
+  url        String
+  type       ResourceType @default(LIEN)
+  nomFichier String?
+  taille     Int?
+  createdAt  DateTime     @default(now())
   @@index([projectId])
 }
 

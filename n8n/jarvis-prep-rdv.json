@@ -1,0 +1,342 @@
+{
+  "name": "🎯 Jarvis — Prep de RDV (T-15 min)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🎯 Dossier vocal avant chaque RDV\n\nToutes les 5 min, Jarvis regarde les RDV qui commencent dans ~15 min. Pour chacun (s'il a au moins un invité) : il croise la mémoire des calls (14 jours) et l'état du cockpit → dossier oral de 60-90 s en note vocale Telegram.\n\n### Setup (5 min — tout est pré-rempli, il n'y a que les credentials)\nSélectionne les credentials existants sur : Agenda (Google Calendar), Mémoire récente + État cockpit (Postgres Neon), Claude (Anthropic), Voix (ElevenLabs Header Auth), et les 2 nœuds Telegram. Puis **Active**.\n\n### Test immédiat\nCrée un événement dans ton agenda qui démarre dans ~16 min, avec un invité (ex. anisse@entrepreneurs.com). Au prochain passage (≤5 min), le dossier arrive sur Telegram. Supprime l'événement après.\n\nFenêtre 13-18 min + passage toutes les 5 min = chaque RDV traité exactement une fois. Les événements sans invité (blocs de focus) et ceux que tu as déclinés sont ignorés.",
+        "height": 560,
+        "width": 420
+      },
+      "id": "sticky-prep-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "n-prep-schedule",
+      "name": "Toutes les 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "boris@entrepreneurs.com"
+        },
+        "returnAll": true,
+        "options": {
+          "timeMin": "={{ $now.plus({ minutes: 13 }).toISO() }}",
+          "timeMax": "={{ $now.plus({ minutes: 18 }).toISO() }}",
+          "singleEvents": true,
+          "orderBy": "startTime"
+        },
+        "timeMin": "={{ $now.plus({ minutes: 13 }).toISO() }}",
+        "timeMax": "={{ $now.plus({ minutes: 18 }).toISO() }}"
+      },
+      "id": "n-prep-cal",
+      "name": "RDV imminents",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -480,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ne garde que les vrais rendez-vous IMMINENTS : début dans 10 à 20 minutes\n// (garde-fou mathématique, quoi que renvoie l'API), au moins un invité humain\n// autre que Boris, et pas décliné par lui. Retourner [] arrête la chaîne.\nconst MOI = 'boris@entrepreneurs.com'\nconst sortie = []\nfor (const item of $input.all()) {\n  const e = item.json\n  if (!e || e.error || !e.summary) continue\n  const debut = e.start?.dateTime ?? e.start?.date\n  if (!debut) continue\n  const dansMinutes = (new Date(debut).getTime() - Date.now()) / 60000\n  if (dansMinutes < 10 || dansMinutes > 20) continue\n  const invites = (e.attendees ?? []).filter((a) => a.email && a.email !== MOI && !a.resource)\n  if (invites.length === 0) continue\n  const moi = (e.attendees ?? []).find((a) => a.email === MOI)\n  if (moi?.responseStatus === 'declined') continue\n  sortie.push({\n    json: {\n      titre: e.summary,\n      debut,\n      invites: invites.map((a) => ({ email: a.email, nom: a.displayName ?? a.email })),\n    },\n  })\n}\nreturn sortie"
+      },
+      "id": "n-prep-filtre",
+      "name": "Filtrer les vrais RDV",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT t.titre,\n       to_char(t.date_call AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS date,\n       t.participants,\n       LEFT(t.contenu, 2500) AS extrait\nFROM (\n  SELECT DISTINCT ON (cle) cle, titre, date_call, participants, contenu\n  FROM jarvis_calls\n  WHERE created_at > now() - interval '14 days'\n  ORDER BY cle, created_at DESC\n) t\nORDER BY t.date_call DESC NULLS LAST\nLIMIT 12",
+        "options": {}
+      },
+      "id": "n-prep-memoire",
+      "name": "Mémoire récente",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -40,
+        300
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.nom, p.status::text AS statut, p.sante::text AS sante, u.name AS owner,\n  COALESCE(i.ouverts,0) AS blocages_ouverts,\n  COALESCE(t.en_retard,0) AS taches_en_retard,\n  p.\"prochainJalon\" AS prochain_jalon\nFROM \"Project\" p\nJOIN \"User\" u ON u.id = p.\"ownerId\"\nLEFT JOIN LATERAL (\n  SELECT (count(*) FILTER (WHERE echeance < now() AND status <> 'TERMINE'))::int AS en_retard\n  FROM \"Task\" WHERE \"projectId\" = p.id) t ON true\nLEFT JOIN LATERAL (\n  SELECT count(*)::int AS ouverts FROM \"Issue\" WHERE \"projectId\" = p.id AND status <> 'CLOTURE') i ON true\nWHERE p.status NOT IN ('ARCHIVE','TERMINE')\nORDER BY p.\"updatedAt\" DESC",
+        "options": {}
+      },
+      "id": "n-prep-cockpit",
+      "name": "État cockpit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        180,
+        300
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Un dossier par RDV imminent, chacun avec la même mémoire partagée.\nconst securise = (nom) => {\n  try {\n    return $(nom).all().map((i) => i.json).filter((j) => j && !j.error)\n  } catch (e) {\n    return []\n  }\n}\nconst rdvs = securise('Filtrer les vrais RDV')\nconst calls = securise('Mémoire récente')\nconst cockpit = securise('État cockpit')\nreturn rdvs.map((rdv) => ({ json: { rdv, calls, cockpit } }))"
+      },
+      "id": "n-prep-assembler",
+      "name": "Assembler le dossier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        300
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Tu es Jarvis. Dans un quart d'heure, Boris a ce rendez-vous : « {{ $json.rdv.titre }} » à {{ $json.rdv.debut ? new Date($json.rdv.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' }) : 'heure inconnue' }} avec {{ $json.rdv.invites.map(i => i.nom).join(', ') }}.\n\nRédige son DOSSIER ORAL de préparation — lu à voix haute, 120 mots MAXIMUM, français parlé, aucune liste, aucun markdown, aucun emoji :\n1) Le dernier échange pertinent avec ces personnes (d'après les calls ci-dessous) et l'essentiel de ce qui s'y est dit.\n2) Les engagements pris de part et d'autre, en signalant ceux qui semblent ne pas avoir bougé.\n3) L'état des projets du cockpit liés à ces personnes ou à ce sujet (santé, blocages, retards) — seulement s'il y a quelque chose à signaler.\n4) Termine par UNE suggestion d'objectif concret pour ce rendez-vous.\nSi la mémoire ne contient rien sur ces personnes ou ce sujet, dis-le en une demi-phrase et donne directement l'objectif suggéré. Ouvre par « Monsieur, dans quinze minutes… » ou une variante.\n\nDonnées :\n{{ JSON.stringify($json) }}"
+      },
+      "id": "n-prep-llm",
+      "name": "Rédiger le dossier",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "id": "n-prep-model",
+      "name": "Claude (Anthropic)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        620,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/iCKVfVbyCo5AAswzTkkX?output_format=mp3_44100_128",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text, model_id: 'eleven_flash_v2_5', voice_settings: { stability: 0.65, similarity_boost: 0.85, style: 0.15 } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "n-prep-tts",
+      "name": "Voix (ElevenLabs)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAudio",
+        "chatId": "8606822360",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-prep-sendvoice",
+      "name": "Envoyer le dossier (vocal)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1060,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "8606822360",
+        "text": "={{ $('Rédiger le dossier').item.json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-prep-sendtext",
+      "name": "Envoyer le texte",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1280,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Toutes les 5 min": {
+      "main": [
+        [
+          {
+            "node": "RDV imminents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RDV imminents": {
+      "main": [
+        [
+          {
+            "node": "Filtrer les vrais RDV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrer les vrais RDV": {
+      "main": [
+        [
+          {
+            "node": "Mémoire récente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mémoire récente": {
+      "main": [
+        [
+          {
+            "node": "État cockpit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "État cockpit": {
+      "main": [
+        [
+          {
+            "node": "Assembler le dossier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assembler le dossier": {
+      "main": [
+        [
+          {
+            "node": "Rédiger le dossier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rédiger le dossier": {
+      "main": [
+        [
+          {
+            "node": "Voix (ElevenLabs)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voix (ElevenLabs)": {
+      "main": [
+        [
+          {
+            "node": "Envoyer le dossier (vocal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer le dossier (vocal)": {
+      "main": [
+        [
+          {
+            "node": "Envoyer le texte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Anthropic)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Rédiger le dossier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris"
+  },
+  "pinData": {}
+}

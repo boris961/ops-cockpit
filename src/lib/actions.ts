@@ -7,8 +7,11 @@ import type {
   Health,
   Priority,
   ProjectStatus,
+  ResourceType,
   TaskStatus,
 } from '@prisma/client'
+
+import { del } from '@vercel/blob'
 
 import { prisma } from '@/lib/prisma'
 import {
@@ -995,6 +998,146 @@ export async function resoudreBlocage(
       utilisateur,
       'BLOCAGE_RESOLU',
       `a résolu le blocage « ${blocage.titre} »`,
+      projet.id,
+    )
+
+    revaliderProjet(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+/* -------------------------------------------------------------- ressources */
+
+const TYPES_RESSOURCE = ['LIEN', 'FICHIER'] as const satisfies readonly ResourceType[]
+
+/**
+ * Un fichier de type FICHIER doit pointer vers le stockage Vercel Blob du
+ * cockpit : on refuse qu'une URL arbitraire se fasse passer pour un fichier.
+ */
+function urlFichierValide(brut: string) {
+  const url = new URL(urlValide(brut))
+  if (!url.hostname.endsWith('.blob.vercel-storage.com')) {
+    throw new Error('Fichier inattendu : il doit provenir du stockage du cockpit.')
+  }
+  return url.toString()
+}
+
+export async function creerRessource(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const projectId = texte(donnees, 'projectId')
+    const { utilisateur, projet } = await projetAccessible(projectId)
+
+    const titre = texte(donnees, 'titre')
+    if (!titre) throw new Error('Le titre de la ressource est obligatoire.')
+
+    const type = valeurEnum(TYPES_RESSOURCE, texte(donnees, 'type')) ?? 'LIEN'
+    const url =
+      type === 'FICHIER'
+        ? urlFichierValide(texte(donnees, 'url'))
+        : urlValide(texte(donnees, 'url'))
+
+    const nomFichier = type === 'FICHIER' ? texte(donnees, 'nomFichier') || null : null
+
+    const tailleBrute = texte(donnees, 'taille')
+    let taille: number | null = null
+    if (type === 'FICHIER' && tailleBrute) {
+      taille = Number.parseInt(tailleBrute, 10)
+      if (!Number.isFinite(taille) || taille < 0) taille = null
+    }
+
+    await prisma.resource.create({
+      data: { projectId: projet.id, titre, url, type, nomFichier, taille },
+    })
+    await journaliser(
+      utilisateur,
+      'LIVRABLE',
+      type === 'FICHIER'
+        ? `a ajouté le fichier « ${titre} » aux ressources`
+        : `a ajouté le lien « ${titre} » aux ressources`,
+      projet.id,
+    )
+
+    revaliderProjet(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+export async function modifierRessource(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const ressourceId = texte(donnees, 'ressourceId')
+    const ressource = await prisma.resource.findUnique({ where: { id: ressourceId } })
+    if (!ressource) throw new Error('Ressource introuvable.')
+
+    const { utilisateur, projet } = await projetAccessible(ressource.projectId)
+
+    const data: { titre?: string; url?: string } = {}
+
+    if (donnees.has('titre')) {
+      const titre = texte(donnees, 'titre')
+      if (!titre) throw new Error('Le titre ne peut pas être vide.')
+      if (titre !== ressource.titre) data.titre = titre
+    }
+
+    // Seule l'adresse d'un lien se corrige : un fichier stocké garde son URL.
+    if (donnees.has('url') && ressource.type === 'LIEN') {
+      const url = urlValide(texte(donnees, 'url'))
+      if (url !== ressource.url) data.url = url
+    }
+
+    if (Object.keys(data).length === 0) return SUCCES
+
+    await prisma.resource.update({ where: { id: ressource.id }, data })
+    await journaliser(
+      utilisateur,
+      'LIVRABLE',
+      `a mis à jour la ressource « ${data.titre ?? ressource.titre} »`,
+      projet.id,
+    )
+
+    revaliderProjet(projet.id)
+    return SUCCES
+  } catch (erreur) {
+    return echec(erreur)
+  }
+}
+
+export async function supprimerRessource(
+  _etatPrecedent: EtatAction,
+  donnees: FormData,
+): Promise<EtatAction> {
+  try {
+    const ressourceId = texte(donnees, 'ressourceId')
+    const ressource = await prisma.resource.findUnique({ where: { id: ressourceId } })
+    if (!ressource) throw new Error('Ressource introuvable.')
+
+    const { utilisateur, projet } = await projetAccessible(ressource.projectId)
+
+    await prisma.resource.delete({ where: { id: ressource.id } })
+
+    if (ressource.type === 'FICHIER') {
+      // Nettoyage du fichier stocké, sans bloquer : un blob orphelin est
+      // sans conséquence, une ligne morte à l'écran en aurait une.
+      try {
+        await del(ressource.url)
+      } catch {
+        /* fichier déjà absent ou token manquant en local */
+      }
+    }
+
+    await journaliser(
+      utilisateur,
+      'LIVRABLE',
+      `a supprimé la ressource « ${ressource.titre} »`,
       projet.id,
     )
 

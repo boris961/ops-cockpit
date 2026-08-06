@@ -1,0 +1,163 @@
+{
+  "name": "📜 Jarvis — Digest de la semaine (vendredi 17h30)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 📜 La semaine en relecture\n\nChaque vendredi 17h30 : Jarvis relit les calls de la semaine et l'activité du cockpit, puis t'envoie sur Telegram la synthèse écrite — fils rouges, décisions, engagements en souffrance, contradictions, et les 3 priorités qu'il suggère pour lundi.\n\n### Setup (2 min)\nSélectionne les credentials existants : Postgres Neon (2 nœuds), Anthropic, Telegram. Chat ID déjà en place. Puis **Active**.\n\n### Aperçu immédiat\nClique **Execute workflow** pour recevoir tout de suite le digest de la semaine écoulée.",
+        "height": 400,
+        "width": 400
+      },
+      "id": "sticky-digest-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1120, 60]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 17 * * 5"
+            }
+          ]
+        }
+      },
+      "id": "n-digest-schedule",
+      "name": "Vendredi 17h30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-660, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT t.titre,\n       to_char(t.date_call AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS date,\n       t.participants,\n       LEFT(t.contenu, 5000) AS extrait\nFROM (\n  SELECT DISTINCT ON (cle) cle, titre, date_call, participants, contenu\n  FROM jarvis_calls\n  WHERE created_at > now() - interval '7 days'\n  ORDER BY cle, created_at DESC\n) t\nORDER BY t.date_call ASC NULLS LAST\nLIMIT 20",
+        "options": {}
+      },
+      "id": "n-digest-calls",
+      "name": "Calls de la semaine",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-440, 300],
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT to_char(a.\"createdAt\" AT TIME ZONE 'Europe/Paris', 'DD/MM') AS jour,\n       u.name AS qui,\n       COALESCE(p.nom, '') AS projet,\n       a.message\nFROM \"Activity\" a\nJOIN \"User\" u ON u.id = a.\"actorId\"\nLEFT JOIN \"Project\" p ON p.id = a.\"projectId\"\nWHERE a.\"createdAt\" > now() - interval '7 days'\nORDER BY a.\"createdAt\" ASC\nLIMIT 120",
+        "options": {}
+      },
+      "id": "n-digest-activite",
+      "name": "Activité cockpit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-220, 300],
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const securise = (nom) => {\n  try {\n    return $(nom).all().map((i) => i.json).filter((j) => j && !j.error)\n  } catch (e) {\n    return []\n  }\n}\nreturn [{\n  json: {\n    semaine: $now.setLocale('fr').toFormat(\"'semaine du' d LLLL yyyy\"),\n    calls: securise('Calls de la semaine'),\n    activite: securise('Activité cockpit'),\n  },\n}]"
+      },
+      "id": "n-digest-assembler",
+      "name": "Assembler la semaine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 300],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Tu es Jarvis, l'assistant personnel de Boris (Co-COO d'Entrepreneurs.com). Rédige sa SYNTHÈSE ÉCRITE de la semaine ({{ $json.semaine }}), à lire tranquillement le vendredi soir sur Telegram.\n\nFormat : texte brut (pas de markdown, pas de #), sections séparées par une ligne vide, chaque section ouverte par un titre court en MAJUSCULES suivi de deux points. 350 mots MAXIMUM. Ton : flegme précis, zéro remplissage.\n\nSections attendues :\nFILS ROUGES : les 2-3 sujets qui sont revenus dans plusieurs calls cette semaine.\nDÉCISIONS : les décisions réellement actées (pas les intentions).\nENGAGEMENTS EN SOUFFRANCE : promesses entendues dans les calls dont on ne voit aucune trace dans l'activité du cockpit — nomme qui doit quoi.\nVIGILANCES : contradictions entre décisions, risques qui montent, signaux faibles.\nLUNDI : les 3 priorités que tu recommandes, une phrase chacune.\n\nSi une section est vide, écris « rien à signaler ». Termine par une phrase de conclusion à ta manière.\n\nDonnées de la semaine :\n{{ JSON.stringify($json) }}"
+      },
+      "id": "n-digest-llm",
+      "name": "Rédiger le digest",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "id": "n-digest-model",
+      "name": "Claude (Anthropic)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [220, 520]
+    },
+    {
+      "parameters": {
+        "chatId": "8606822360",
+        "text": "=📜 {{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-digest-send",
+      "name": "Envoyer le digest",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [440, 300]
+    }
+  ],
+  "connections": {
+    "Vendredi 17h30": {
+      "main": [
+        [
+          { "node": "Calls de la semaine", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Calls de la semaine": {
+      "main": [
+        [
+          { "node": "Activité cockpit", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Activité cockpit": {
+      "main": [
+        [
+          { "node": "Assembler la semaine", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Assembler la semaine": {
+      "main": [
+        [
+          { "node": "Rédiger le digest", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Rédiger le digest": {
+      "main": [
+        [
+          { "node": "Envoyer le digest", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claude (Anthropic)": {
+      "ai_languageModel": [
+        [
+          { "node": "Rédiger le digest", "type": "ai_languageModel", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris"
+  },
+  "pinData": {}
+}

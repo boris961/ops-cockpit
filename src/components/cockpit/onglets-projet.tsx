@@ -1,19 +1,21 @@
 'use client'
 
-import { FileText, LayoutList } from 'lucide-react'
+import { FileText, FolderOpen, LayoutList } from 'lucide-react'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 /**
- * Onglets de la fiche projet. Les deux panneaux sont rendus cote serveur et
+ * Onglets de la fiche projet. Les panneaux sont rendus cote serveur et
  * passes en props : seul le basculement est client.
  */
 export function OngletsProjet({
   detail,
   suivi,
+  ressources,
 }: {
   detail: React.ReactNode
   suivi: React.ReactNode
+  ressources: React.ReactNode
 }) {
   return (
     <Tabs defaultValue="detail" className="gap-5">
@@ -26,10 +28,15 @@ export function OngletsProjet({
           <FileText className="size-4" strokeWidth={1.75} />
           Suivi
         </TabsTrigger>
+        <TabsTrigger value="ressources" className="px-3">
+          <FolderOpen className="size-4" strokeWidth={1.75} />
+          Ressources
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="detail">{detail}</TabsContent>
       <TabsContent value="suivi">{suivi}</TabsContent>
+      <TabsContent value="ressources">{ressources}</TabsContent>
     </Tabs>
   )
 }

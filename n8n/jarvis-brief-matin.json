@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 🌅 Brief du matin — poussé à 7h30 (lun-ven)\n\nAgenda + état du cockpit + emails → Jarvis rédige un brief oral de 90 s → note vocale Telegram.\n\n### Setup (5 min)\n1. Credentials : réutilise ceux de Jarvis v1 (Google Calendar, Anthropic, ElevenLabs) + le credential **Postgres Neon** du serveur MCP cockpit. Gmail : optionnel — désactive le nœud « Emails récents » si tu ne veux pas le brancher.\n2. **Ton chat ID Telegram** : remplace `REMPLACE_TON_CHAT_ID` dans les 2 nœuds Telegram (tu l'as noté à l'étape 7c du manuel, sinon : envoie un message au bot et regarde `message.chat.id` dans une exécution de Jarvis v1).\n3. Nœud « Agenda du jour » : vérifie le calendrier sélectionné.\n4. Voix ElevenLabs : même ID que Jarvis v1 (remplace dans l'URL du nœud Voix).\n5. Active le workflow. Fuseau : réglé sur Europe/Paris dans les settings.\n\n💡 Les nœuds Cockpit et Emails sont en « continue on error » : si une source est indisponible, le brief part quand même avec le reste.",
+        "content": "## 🌅 Brief du matin — poussé à 7h30 (lun-ven)\n\nAgenda + état du cockpit + emails → Jarvis rédige un brief oral de 90 s → note vocale Telegram.\n\n### Setup (5 min)\n1. Credentials : réutilise ceux de Jarvis v1 (Google Calendar, Anthropic, ElevenLabs) + le credential **Postgres Neon** du serveur MCP cockpit. Gmail : optionnel — désactive le nœud « Emails récents » si tu ne veux pas le brancher.\n2. **Ton chat ID Telegram** : remplace `8606822360` dans les 2 nœuds Telegram (tu l'as noté à l'étape 7c du manuel, sinon : envoie un message au bot et regarde `message.chat.id` dans une exécution de Jarvis v1).\n3. Nœud « Agenda du jour » : vérifie le calendrier sélectionné.\n4. Voix ElevenLabs : même ID que Jarvis v1 (remplace dans l'URL du nœud Voix).\n5. Active le workflow. Fuseau : réglé sur Europe/Paris dans les settings.\n\n💡 Les nœuds Cockpit et Emails sont en « continue on error » : si une source est indisponible, le brief part quand même avec le reste.",
         "height": 560,
         "width": 400
       },
@@ -87,7 +87,21 @@
     },
     {
       "parameters": {
-        "jsCode": "const safe = (name) => {\n  try {\n    return $(name).all().map((i) => i.json).filter((j) => j && !j.error)\n  } catch (e) {\n    return []\n  }\n}\n\nconst agenda = safe('Agenda du jour').map((e) => ({\n  titre: e.summary ?? '(sans titre)',\n  debut: e.start?.dateTime ?? e.start?.date ?? null,\n  fin: e.end?.dateTime ?? e.end?.date ?? null,\n  invites: Array.isArray(e.attendees) ? e.attendees.length : 0,\n}))\n\nconst cockpit = safe('État cockpit')\n\nconst emails = safe('Emails récents').map((m) => ({\n  de: m.from ?? m.From ?? '',\n  sujet: m.subject ?? m.Subject ?? '(sans objet)',\n  extrait: String(m.snippet ?? '').slice(0, 140),\n}))\n\nreturn [{\n  json: {\n    date: $now.setLocale('fr').toFormat(\"cccc d LLLL yyyy\"),\n    agenda,\n    cockpit,\n    emails,\n  },\n}]"
+        "operation": "executeQuery",
+        "query": "SELECT t.titre,\n       to_char(t.date_call AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS date,\n       LEFT(t.contenu, 2000) AS extrait\nFROM (\n  SELECT DISTINCT ON (cle) cle, titre, date_call, contenu\n  FROM jarvis_calls\n  WHERE created_at > now() - interval '3 days'\n  ORDER BY cle, created_at DESC\n) t\nORDER BY t.date_call DESC NULLS LAST\nLIMIT 6",
+        "options": {}
+      },
+      "id": "n-brief-callsrecents",
+      "name": "Calls récents",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [90, 300],
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const safe = (name) => {\n  try {\n    return $(name).all().map((i) => i.json).filter((j) => j && !j.error)\n  } catch (e) {\n    return []\n  }\n}\n\nconst agenda = safe('Agenda du jour').map((e) => ({\n  titre: e.summary ?? '(sans titre)',\n  debut: e.start?.dateTime ?? e.start?.date ?? null,\n  fin: e.end?.dateTime ?? e.end?.date ?? null,\n  invites: Array.isArray(e.attendees) ? e.attendees.length : 0,\n}))\n\nconst cockpit = safe('État cockpit')\n\nconst calls = safe('Calls récents').map((c) => ({\n  titre: c.titre,\n  date: c.date,\n  extrait: String(c.extrait ?? '').slice(0, 2000),\n}))\n\nconst emails = safe('Emails récents').map((m) => ({\n  de: m.from ?? m.From ?? '',\n  sujet: m.subject ?? m.Subject ?? '(sans objet)',\n  extrait: String(m.snippet ?? '').slice(0, 140),\n}))\n\nreturn [{\n  json: {\n    date: $now.setLocale('fr').toFormat(\"cccc d LLLL yyyy\"),\n    agenda,\n    cockpit,\n    emails,\n    calls,\n  },\n}]"
       },
       "id": "n-brief-code",
       "name": "Assembler le contexte",
@@ -99,7 +113,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Tu es Jarvis, l'assistant personnel de Boris (Co-COO d'Entrepreneurs.com, fondateur de Made To Scale). Rédige son BRIEF ORAL du matin — il sera lu à voix haute par une synthèse vocale.\n\nRègles strictes :\n- Français parlé naturel, 150 mots MAXIMUM, aucune liste, aucun markdown, aucun emoji, aucune URL.\n- Structure : 1) ses rendez-vous du jour avec les heures (heure de Paris, signale les fuseaux exotiques), 2) ce qui mérite attention dans le cockpit (santé, blocages P0/P1, tâches en retard — ignore ce qui va bien), 3) les 1-2 emails qui méritent vraiment son attention, s'il y en a.\n- Termine par UNE phrase : la priorité n°1 de la journée, selon toi.\n- Ton : flegme courtois, précis, un soupçon d'esprit. Tu peux ouvrir par « Bonjour Monsieur » ou une variante.\n- Si une section est vide (pas de RDV, cockpit calme, pas d'email notable), dis-le en une demi-phrase et passe.\n\nDonnées du jour :\n{{ JSON.stringify($json) }}"
+        "text": "=Tu es Jarvis, l'assistant personnel de Boris (Co-COO d'Entrepreneurs.com, fondateur de Made To Scale). Rédige son BRIEF ORAL du matin — il sera lu à voix haute par une synthèse vocale.\n\nRègles strictes :\n- Français parlé naturel, 150 mots MAXIMUM, aucune liste, aucun markdown, aucun emoji, aucune URL.\n- Structure : 1) ses rendez-vous du jour avec les heures (heure de Paris, signale les fuseaux exotiques), 2) ce qui mérite attention dans le cockpit (santé, blocages P0/P1, tâches en retard — ignore ce qui va bien), 3) les 1-2 emails qui méritent vraiment son attention, s'il y en a, 4) UN engagement pris dans un call récent qui ne semble suivi d'aucun effet visible dans le cockpit, s'il y en a un — nomme qui doit quoi.\n- Termine par UNE phrase : la priorité n°1 de la journée, selon toi.\n- Ton : flegme courtois, précis, un soupçon d'esprit. Tu peux ouvrir par « Bonjour Monsieur » ou une variante.\n- Si une section est vide (pas de RDV, cockpit calme, pas d'email notable), dis-le en une demi-phrase et passe.\n\nDonnées du jour :\n{{ JSON.stringify($json) }}"
       },
       "id": "n-brief-llm",
       "name": "Rédiger le brief",
@@ -150,7 +164,7 @@
     {
       "parameters": {
         "operation": "sendAudio",
-        "chatId": "REMPLACE_TON_CHAT_ID",
+        "chatId": "8606822360",
         "binaryData": true,
         "binaryPropertyName": "data",
         "additionalFields": {
@@ -165,7 +179,7 @@
     },
     {
       "parameters": {
-        "chatId": "REMPLACE_TON_CHAT_ID",
+        "chatId": "8606822360",
         "text": "={{ $('Rédiger le brief').item.json.text }}",
         "additionalFields": {
           "appendAttribution": false
@@ -201,6 +215,13 @@
       ]
     },
     "Emails récents": {
+      "main": [
+        [
+          { "node": "Calls récents", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Calls récents": {
       "main": [
         [
           { "node": "Assembler le contexte", "type": "main", "index": 0 }

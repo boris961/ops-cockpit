@@ -166,6 +166,9 @@ export async function getProjet(id: string) {
         // Les calls dates d'abord, du plus recent au plus ancien.
         orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       },
+      ressources: {
+        orderBy: { createdAt: 'desc' },
+      },
     },
   })
 
