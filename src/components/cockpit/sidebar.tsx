@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { CalendarClock, FolderKanban, LayoutDashboard, Users } from 'lucide-react'
@@ -29,14 +30,23 @@ export function Sidebar({
   return (
     <aside className="verre sticky top-4 m-4 flex h-[calc(100vh-2rem)] w-60 shrink-0 flex-col rounded-xl bg-sidebar ring-1 ring-white/10">
       <div className="px-5 py-6">
-        <Link href="/" className="block">
-          <span className="text-lg leading-none font-semibold tracking-tight">
-            Entrepreneurs
-          </span>
-          <span className="text-brand">.</span>
-          <p className="mt-1.5 text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
-            Ops cockpit
-          </p>
+        <Link href="/" className="flex items-center gap-3">
+          <Image
+            src="/logo-entrepreneurs.png"
+            alt="Logo Entrepreneurs.com"
+            width={36}
+            height={36}
+            priority
+            className="size-9 shrink-0 rounded-lg ring-1 ring-white/10"
+          />
+          <div className="min-w-0">
+            <p className="text-lg leading-none font-semibold tracking-tight">
+              Entrepreneurs<span className="text-brand">.</span>
+            </p>
+            <p className="mt-1.5 text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
+              Ops cockpit
+            </p>
+          </div>
         </Link>
       </div>
 
