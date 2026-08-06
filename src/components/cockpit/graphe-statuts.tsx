@@ -10,8 +10,10 @@ export type PointStatut = {
 }
 
 /**
- * Part-au-tout, 5 classes max. La legende chiffree accompagne toujours l'anneau :
- * l'identite ne repose jamais sur la couleur seule.
+ * Part-au-tout, 5 classes max. La legende chiffree accompagne toujours l'anneau
+ * (l'identite ne repose jamais sur la couleur seule) et double chaque part d'une
+ * barre de proportion. Colonne pleine hauteur, centree : la carte reste
+ * equilibree meme quand sa voisine de grille est plus haute.
  */
 export function GrapheStatuts({ data }: { data: PointStatut[] }) {
   const total = data.reduce((somme, d) => somme + d.valeur, 0)
@@ -21,16 +23,16 @@ export function GrapheStatuts({ data }: { data: PointStatut[] }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-6 sm:flex-row">
-      <div className="relative shrink-0">
-        <ResponsiveContainer width={180} height={180}>
+    <div className="flex h-full min-h-0 flex-col justify-center gap-7">
+      <div className="relative self-center">
+        <ResponsiveContainer width={200} height={200}>
           <PieChart>
             <Pie
               data={data}
               dataKey="valeur"
               nameKey="statut"
-              innerRadius={58}
-              outerRadius={86}
+              innerRadius={64}
+              outerRadius={95}
               paddingAngle={2}
               stroke="var(--fond)"
               strokeWidth={2}
@@ -66,24 +68,39 @@ export function GrapheStatuts({ data }: { data: PointStatut[] }) {
         </div>
       </div>
 
-      <ul className="w-full min-w-0 space-y-2">
-        {data.map((d) => (
-          <li key={d.statut} className="flex items-center gap-2.5 text-sm">
-            <span
-              aria-hidden
-              className="size-2.5 shrink-0 rounded-full"
-              style={{
-                backgroundColor: STATUT_COLOR[d.statut],
-                boxShadow: `0 0 10px -1px ${STATUT_COLOR[d.statut]}`,
-              }}
-            />
-            <span className="min-w-0 flex-1 truncate">{STATUT_LABEL[d.statut] ?? d.statut}</span>
-            <span className="tabular-nums">{d.valeur}</span>
-            <span className="w-10 text-right tabular-nums text-muted-foreground">
-              {Math.round((d.valeur / total) * 100)}%
-            </span>
-          </li>
-        ))}
+      <ul className="w-full min-w-0 space-y-3.5">
+        {data.map((d) => {
+          const part = Math.round((d.valeur / total) * 100)
+          return (
+            <li key={d.statut}>
+              <div className="flex items-center gap-2.5 text-sm">
+                <span
+                  aria-hidden
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: STATUT_COLOR[d.statut],
+                    boxShadow: `0 0 10px -1px ${STATUT_COLOR[d.statut]}`,
+                  }}
+                />
+                <span className="min-w-0 flex-1 truncate">
+                  {STATUT_LABEL[d.statut] ?? d.statut}
+                </span>
+                <span className="tabular-nums">{d.valeur}</span>
+                <span className="w-10 text-right tabular-nums text-muted-foreground">
+                  {part}%
+                </span>
+              </div>
+              {/* Barre de proportion : redit la part a l'horizontale, et remplit
+                  la largeur de la carte. */}
+              <div className="mt-1.5 ml-5 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${part}%`, backgroundColor: STATUT_COLOR[d.statut] }}
+                />
+              </div>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

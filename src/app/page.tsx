@@ -101,7 +101,9 @@ export default async function VueDEnsemble(props: PageProps<'/'>) {
               <GrapheAvancement data={pointsAvancement} />
             </Carte>
 
-            <Carte titre="Répartition par statut">
+            {/* flex-1 : le contenu occupe toute la hauteur de la carte, le
+                graphique centre sa colonne dedans (fini le vide en dessous). */}
+            <Carte titre="Répartition par statut" contenuClassName="flex-1">
               <GrapheStatuts data={pointsStatut} />
             </Carte>
           </div>
