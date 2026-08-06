@@ -226,7 +226,6 @@ export async function modifierProjet(
       ownerId?: string
       status?: ProjectStatus
       sante?: Health
-      prochainJalon?: string | null
       departements?: string[]
     } = {}
     const journal: Array<{ type: ActivityType; message: string }> = []
@@ -245,17 +244,6 @@ export async function modifierProjet(
       if (description !== (projet.description ?? '')) {
         data.description = description || null
         journal.push({ type: 'COMMENTAIRE', message: 'a mis à jour la description' })
-      }
-    }
-
-    if (donnees.has('prochainJalon')) {
-      const jalon = texte(donnees, 'prochainJalon')
-      if (jalon !== (projet.prochainJalon ?? '')) {
-        data.prochainJalon = jalon || null
-        journal.push({
-          type: 'COMMENTAIRE',
-          message: jalon ? `a fixé le prochain jalon : « ${jalon} »` : 'a retiré le prochain jalon',
-        })
       }
     }
 

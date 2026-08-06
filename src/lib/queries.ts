@@ -2,6 +2,7 @@ import type { Prisma, TaskStatus } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { estAdmin, utilisateurCourant, type Utilisateur } from '@/lib/autorisation'
+import { dateCourte } from '@/lib/cockpit'
 
 /**
  * Perimetre de lecture d'un utilisateur : tout pour COO / HEAD, sinon les
@@ -26,6 +27,25 @@ function avancementCalcule(taches: ReadonlyArray<{ status: string }>) {
   if (taches.length === 0) return 0
   const terminees = taches.filter((tache) => tache.status === 'TERMINE').length
   return Math.round((terminees / taches.length) * 100)
+}
+
+/**
+ * Prochain jalon derive des taches : la tache non terminee dont l'echeance est
+ * la plus proche (une tache en retard reste donc en tete jusqu'a sa cloture).
+ * Remplace l'ancien champ saisi a la main. Nul si aucune tache datee.
+ */
+function jalonCalcule(
+  taches: ReadonlyArray<{ titre: string; status: string; echeance: Date | null }>,
+) {
+  let prochaine: { titre: string; echeance: Date } | null = null
+  for (const tache of taches) {
+    if (tache.status === 'TERMINE' || !tache.echeance) continue
+    if (!prochaine || tache.echeance < prochaine.echeance) {
+      prochaine = { titre: tache.titre, echeance: tache.echeance }
+    }
+  }
+  if (!prochaine) return null
+  return `${prochaine.titre} · ${dateCourte(prochaine.echeance)}`
 }
 
 export async function getOverview({ porteur }: Filtres = {}) {
@@ -57,7 +77,10 @@ export async function getOverview({ porteur }: Filtres = {}) {
       }),
       prisma.project.findMany({
         where: projetsActifsWhere,
-        include: { owner: true, taches: { select: { status: true } } },
+        include: {
+          owner: true,
+          taches: { select: { status: true, titre: true, echeance: true } },
+        },
         orderBy: { updatedAt: 'desc' },
       }),
       prisma.activity.findMany({
@@ -73,6 +96,7 @@ export async function getOverview({ porteur }: Filtres = {}) {
   const projets = projetsBruts.map((projet) => ({
     ...projet,
     avancement: avancementCalcule(projet.taches),
+    prochainJalon: jalonCalcule(projet.taches),
   }))
 
   const avancementMoyen = projets.length
@@ -108,7 +132,7 @@ export async function getProjets({ archives = false, porteur }: Filtres = {}) {
     },
     include: {
       owner: true,
-      taches: { select: { status: true } },
+      taches: { select: { status: true, titre: true, echeance: true } },
       _count: { select: { blocages: true } },
     },
     orderBy: { updatedAt: 'desc' },
@@ -117,6 +141,7 @@ export async function getProjets({ archives = false, porteur }: Filtres = {}) {
   return projets.map((projet) => ({
     ...projet,
     avancement: avancementCalcule(projet.taches),
+    prochainJalon: jalonCalcule(projet.taches),
   }))
 }
 
@@ -173,7 +198,11 @@ export async function getProjet(id: string) {
   })
 
   if (!projet) return null
-  return { ...projet, avancement: avancementCalcule(projet.taches) }
+  return {
+    ...projet,
+    avancement: avancementCalcule(projet.taches),
+    prochainJalon: jalonCalcule(projet.taches),
+  }
 }
 
 /** Utilisateurs proposes dans les selects (directeur, membres, filtre porteur). */

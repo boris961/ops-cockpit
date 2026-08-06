@@ -76,13 +76,13 @@ export function FicheProjet({
         options={OPTIONS_SANTE}
       />
       <ChampDepartements projectId={projectId} valeurs={valeurs.departements} />
-      <ChampTexte
-        projectId={projectId}
-        nom="prochainJalon"
-        libelle="Prochain jalon"
-        valeur={valeurs.prochainJalon}
-        placeholder="Ex. Recette module 2"
-      />
+      <div>
+        <p className={classeLibelle}>Prochain jalon</p>
+        <p className="mt-1 text-sm">{valeurs.prochainJalon || '—'}</p>
+        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+          Automatique : la prochaine tâche non terminée, par échéance.
+        </p>
+      </div>
       <ChampTexte
         projectId={projectId}
         nom="description"
