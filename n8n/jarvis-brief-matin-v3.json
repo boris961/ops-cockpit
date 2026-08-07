@@ -1,0 +1,352 @@
+{
+  "name": "🌅 Jarvis — Brief du matin (7h30) v3",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 🌅 Brief du matin — v3\n\nCorrige le « agenda vide » du 7 août : la fenêtre de dates est maintenant appliquée au bon endroit (le nœud ignorait options.timeMin/timeMax), un garde-fou en code ne laisse passer qu'aujourd'hui + demain, et si une source ne répond pas, Jarvis le DIT au lieu d'affirmer que c'est calme.\n\n### Remplacement (3 min)\n1. Désactive l'ancien « Brief du matin (7h30) ».\n2. Ici, sélectionne tes credentials existants sur 8 nœuds : Agenda (Google Calendar), État cockpit + Calls récents (Postgres Neon), Emails récents (Gmail), Claude (Anthropic), Voix (Header Auth ElevenLabs), 2× Telegram.\n3. **Execute workflow** pour tester → le brief arrive tout de suite sur Telegram.\n4. Active. Fuseau Europe/Paris déjà réglé.",
+        "height": 560,
+        "width": 400
+      },
+      "id": "sticky-brief-1",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 7 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "n-brief-schedule",
+      "name": "Tous les matins 7h30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "boris@entrepreneurs.com"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $now.setZone('Europe/Paris').startOf('day').toISO() }}",
+        "timeMax": "={{ $now.setZone('Europe/Paris').plus({ days: 1 }).endOf('day').toISO() }}",
+        "options": {
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "n-brief-cal",
+      "name": "Agenda du jour",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -460,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.nom, p.status::text AS statut, p.sante::text AS sante, u.name AS owner,\n  COALESCE(t.total,0) AS taches_total,\n  COALESCE(t.terminees,0) AS taches_terminees,\n  COALESCE(t.en_retard,0) AS taches_en_retard,\n  CASE WHEN COALESCE(t.total,0)=0 THEN p.avancement ELSE ROUND(100.0*t.terminees/t.total)::int END AS avancement_pct,\n  COALESCE(i.ouverts,0) AS blocages_ouverts,\n  COALESCE(i.p0,0) AS blocages_p0,\n  p.\"prochainJalon\" AS prochain_jalon,\n  to_char(p.\"dateCible\",'YYYY-MM-DD') AS date_cible\nFROM \"Project\" p\nJOIN \"User\" u ON u.id = p.\"ownerId\"\nLEFT JOIN LATERAL (\n  SELECT count(*)::int AS total,\n         (count(*) FILTER (WHERE status='TERMINE'))::int AS terminees,\n         (count(*) FILTER (WHERE echeance < now() AND status <> 'TERMINE'))::int AS en_retard\n  FROM \"Task\" WHERE \"projectId\" = p.id) t ON true\nLEFT JOIN LATERAL (\n  SELECT count(*)::int AS ouverts,\n         (count(*) FILTER (WHERE priorite='P0'))::int AS p0\n  FROM \"Issue\" WHERE \"projectId\" = p.id AND status <> 'CLOTURE') i ON true\nWHERE p.status <> 'ARCHIVE'\nORDER BY p.sante DESC, p.\"updatedAt\" DESC",
+        "options": {}
+      },
+      "id": "n-brief-pg",
+      "name": "État cockpit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -240,
+        300
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 10,
+        "simple": true,
+        "filters": {
+          "q": "is:unread newer_than:1d -category:promotions"
+        }
+      },
+      "id": "n-brief-gmail",
+      "name": "Emails récents",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -20,
+        300
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT t.titre,\n       to_char(t.date_call AT TIME ZONE 'Europe/Paris', 'YYYY-MM-DD') AS date,\n       LEFT(t.contenu, 2000) AS extrait\nFROM (\n  SELECT DISTINCT ON (cle) cle, titre, date_call, contenu\n  FROM jarvis_calls\n  WHERE created_at > now() - interval '3 days'\n  ORDER BY cle, created_at DESC\n) t\nORDER BY t.date_call DESC NULLS LAST\nLIMIT 6",
+        "options": {}
+      },
+      "id": "n-brief-callsrecents",
+      "name": "Calls récents",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        90,
+        300
+      ],
+      "executeOnce": true,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Items bruts d'un noeud + indicateur « le noeud a bien tourne »\nconst brut = (nom) => {\n  try {\n    return [$(nom).all().map((i) => i.json), true]\n  } catch (e) {\n    return [[], false]\n  }\n}\n// alwaysOutputData produit un item vide {} quand il n'y a aucun resultat :\n// on l'ecarte, comme les items d'erreur de « continue on error ».\nconst nettoie = (liste) => liste.filter((j) => j && !j.error && Object.keys(j).length > 0)\n\n// Indisponible = noeud jamais lance, ou n'ayant produit que des erreurs.\nconst dispo = (lance, bruts) => {\n  if (!lance) return false\n  if (bruts.some((j) => j && j.error) && nettoie(bruts).length === 0) return false\n  return true\n}\n\nconst [agendaBrut, agendaLance] = brut('Agenda du jour')\nconst [cockpitBrut, cockpitLance] = brut('État cockpit')\nconst [callsBrut, callsLance] = brut('Calls récents')\nconst [emailsBrut, emailsLance] = brut('Emails récents')\n\nconst zone = 'Europe/Paris'\nconst aujourdHui = $now.setZone(zone).toISODate()\nconst dateDemain = $now.setZone(zone).plus({ days: 1 }).toISODate()\nconst jourDe = (iso) => {\n  if (!iso) return null\n  try {\n    return DateTime.fromISO(iso).setZone(zone).toISODate()\n  } catch (e) {\n    return null\n  }\n}\n\nconst evenements = nettoie(agendaBrut).map((e) => ({\n  titre: e.summary ?? '(sans titre)',\n  debut: e.start?.dateTime ?? e.start?.date ?? null,\n  fin: e.end?.dateTime ?? e.end?.date ?? null,\n  invites: Array.isArray(e.attendees) ? e.attendees.length : 0,\n}))\n\n// Garde-fou : quoi que l'API ait renvoye, seuls aujourd'hui et demain passent.\nconst agenda = evenements.filter((e) => jourDe(e.debut) === aujourdHui)\nconst demain = evenements.filter((e) => jourDe(e.debut) === dateDemain)\n\nconst cockpit = nettoie(cockpitBrut)\n\nconst calls = nettoie(callsBrut).map((c) => ({\n  titre: c.titre,\n  date: c.date,\n  extrait: String(c.extrait ?? '').slice(0, 2000),\n}))\n\nconst emails = nettoie(emailsBrut).map((m) => ({\n  de: m.from ?? m.From ?? '',\n  sujet: m.subject ?? m.Subject ?? '(sans objet)',\n  extrait: String(m.snippet ?? '').slice(0, 140),\n}))\n\nreturn [{\n  json: {\n    date: $now.setZone(zone).setLocale('fr').toFormat(\"cccc d LLLL yyyy\"),\n    sources_indisponibles: [\n      dispo(agendaLance, agendaBrut) ? null : 'agenda',\n      dispo(cockpitLance, cockpitBrut) ? null : 'cockpit',\n      dispo(emailsLance, emailsBrut) ? null : 'emails',\n      dispo(callsLance, callsBrut) ? null : 'calls',\n    ].filter(Boolean),\n    agenda,\n    demain,\n    cockpit,\n    emails,\n    calls,\n  },\n}]"
+      },
+      "id": "n-brief-code",
+      "name": "Assembler le contexte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Tu es Jarvis, l'assistant personnel de Boris (Co-COO d'Entrepreneurs.com, fondateur de Made To Scale). Rédige son BRIEF ORAL du matin — il sera lu à voix haute par une synthèse vocale.\n\nRègles strictes :\n- Français parlé naturel, 160 mots MAXIMUM, aucune liste, aucun markdown, aucun emoji, aucune URL.\n- Structure : 1) ses rendez-vous du jour (champ « agenda ») avec les heures, heure de Paris — puis une demi-phrase sur demain (champ « demain ») si quelque chose s'y détache, 2) ce qui mérite attention dans le cockpit (santé, blocages P0/P1, tâches en retard — ignore ce qui va bien), 3) les 1-2 emails qui méritent vraiment son attention, s'il y en a, 4) UN engagement pris dans un call récent qui ne semble suivi d'aucun effet visible dans le cockpit, s'il y en a un — nomme qui doit quoi.\n- IMPÉRATIF : si « sources_indisponibles » n'est pas vide, dis clairement que tu n'as pas pu consulter ces sources ce matin (par ex. « je n'ai pas réussi à lire votre agenda »). Ne dis JAMAIS qu'une source indisponible est vide, calme ou sans nouveauté.\n- Termine par UNE phrase : la priorité n°1 de la journée, selon toi.\n- Ton : flegme courtois, précis, un soupçon d'esprit. Tu peux ouvrir par « Bonjour Monsieur » ou une variante.\n- Si une section est réellement vide (pas de RDV, cockpit calme, pas d'email notable), dis-le en une demi-phrase et passe.\n\nDonnées du jour :\n{{ JSON.stringify($json) }}"
+      },
+      "id": "n-brief-llm",
+      "name": "Rédiger le brief",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5",
+          "cachedResultName": "Claude Sonnet 4.5"
+        },
+        "options": {}
+      },
+      "id": "n-brief-model",
+      "name": "Claude (Anthropic)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        420,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/text-to-speech/iCKVfVbyCo5AAswzTkkX?output_format=mp3_44100_128",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text, model_id: 'eleven_flash_v2_5', voice_settings: { stability: 0.65, similarity_boost: 0.85, style: 0.15 } }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "n-brief-tts",
+      "name": "Voix (ElevenLabs)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAudio",
+        "chatId": "8606822360",
+        "binaryData": true,
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-brief-sendvoice",
+      "name": "Envoyer le brief (vocal)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "8606822360",
+        "text": "={{ $('Rédiger le brief').item.json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n-brief-sendtext",
+      "name": "Envoyer le texte",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1080,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Tous les matins 7h30": {
+      "main": [
+        [
+          {
+            "node": "Agenda du jour",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agenda du jour": {
+      "main": [
+        [
+          {
+            "node": "État cockpit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "État cockpit": {
+      "main": [
+        [
+          {
+            "node": "Emails récents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emails récents": {
+      "main": [
+        [
+          {
+            "node": "Calls récents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calls récents": {
+      "main": [
+        [
+          {
+            "node": "Assembler le contexte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assembler le contexte": {
+      "main": [
+        [
+          {
+            "node": "Rédiger le brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rédiger le brief": {
+      "main": [
+        [
+          {
+            "node": "Voix (ElevenLabs)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voix (ElevenLabs)": {
+      "main": [
+        [
+          {
+            "node": "Envoyer le brief (vocal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer le brief (vocal)": {
+      "main": [
+        [
+          {
+            "node": "Envoyer le texte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Anthropic)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Rédiger le brief",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Paris"
+  },
+  "pinData": {}
+}
